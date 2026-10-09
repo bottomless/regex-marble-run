@@ -4,6 +4,7 @@ import { RoundedBox } from '@react-three/drei';
 import type { Group } from 'three';
 import type { Program } from '../engine/ir.ts';
 import type { MachineLayout } from '../layout/pieces.ts';
+import type { PlaybackStore } from '../playback/store.ts';
 import { copy } from '../copy.ts';
 import { displayMetrics, visibleTiles } from './geometry.ts';
 import type { DisplayMetrics } from './geometry.ts';
@@ -12,6 +13,7 @@ import Tracks from './Tracks.tsx';
 import Gates from './Gates.tsx';
 import Pieces from './Pieces.tsx';
 import Glyph from './Glyph.tsx';
+import Marble from './Marble.tsx';
 
 function TileRail({
   input,
@@ -118,6 +120,7 @@ export default function Machine({
   materials,
   reducedMotion,
   onExpand,
+  store,
 }: {
   machine: MachineLayout;
   program: Program;
@@ -125,6 +128,7 @@ export default function Machine({
   materials: Materials;
   reducedMotion: boolean;
   onExpand: (id: number) => void;
+  store?: PlaybackStore;
 }) {
   const metrics = displayMetrics(machine);
   const building = useRef<Group>(null);
@@ -144,6 +148,7 @@ export default function Machine({
           <Tracks machine={machine} materials={materials} />
           <Gates machine={machine} materials={materials} program={program} />
           <Pieces machine={machine} program={program} materials={materials} onExpand={onExpand} />
+          {store && <Marble store={store} machine={machine} materials={materials} />}
         </group>
       </group>
       <TileRail

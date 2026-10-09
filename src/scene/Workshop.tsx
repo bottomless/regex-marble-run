@@ -7,6 +7,8 @@ import type { Program } from '../engine/ir.ts';
 import { layout } from '../layout/layout.ts';
 import DebugLayout from '../layout/DebugLayout.tsx';
 import { copy } from '../copy.ts';
+import { usePlaybackController } from '../playback/usePlayback.ts';
+import type { PlaybackStore } from '../playback/store.ts';
 import { displayMetrics } from './geometry.ts';
 import { useMaterials } from './materials.ts';
 import Machine from './Machine.tsx';
@@ -37,9 +39,11 @@ function Scene({
   dark,
   reducedMotion,
   resetKey,
+  store,
   onExpand,
 }: WorkshopProps & {
   machine: ReturnType<typeof layout>;
+  store: PlaybackStore;
   onExpand: (id: number) => void;
 }) {
   const materials = useMaterials(dark);
@@ -99,6 +103,7 @@ function Scene({
         materials={materials}
         reducedMotion={reducedMotion}
         onExpand={onExpand}
+        store={store}
       />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.04, 0]} receiveShadow>
         <planeGeometry args={[200, 200]} />
@@ -140,6 +145,14 @@ function BuildWorkshop(props: WorkshopProps) {
       return { machine: null, error: error instanceof Error ? error.message : copy.scene.tooLarge };
     }
   }, [program, expandedModules]);
+  const playback = usePlaybackController({
+    pattern: program.source,
+    flags: program.flagsText,
+    input: props.input,
+    program,
+    layout: built.machine,
+    reducedMotion: props.reducedMotion,
+  });
   const fallback = (
     <div className="scene-fallback">
       <p role="status">{copy.scene.error}</p>
@@ -171,7 +184,7 @@ function BuildWorkshop(props: WorkshopProps) {
           }}
         >
           <Suspense fallback={null}>
-            <Scene {...props} machine={built.machine} onExpand={expand} />
+            <Scene {...props} machine={built.machine} store={playback.store} onExpand={expand} />
           </Suspense>
         </Canvas>
         {built.machine.pieces.some((piece) => piece.kind === 'module') && (

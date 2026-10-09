@@ -236,3 +236,29 @@ skeleton-only routing; the original milestone context is retained.
 - **Determinism under scrubbing.** Stepping to every event yields a finite pose, and seeking events
   backward reconstructs the identical `machine` sequence as forward — confirming the keyframed cursor has
   no path-dependent drift, which is what makes the timeline scrubber safe to ship.
+
+### Step 6: live wiring — engine run, playback clock, hero marble (`src/playback/usePlayback.ts`, `src/scene/Marble.tsx`)
+
+- **First live engine run in the app.** M4 rendered a static machine only; the engine was never executed
+  outside tests. `usePlaybackController` now runs the backtrack engine in a worker (via the already-tested
+  `createEngineClient`) whenever pattern/flags/input change, and `store.load`s the returned trace + result.
+  Runs are budgeted (`wallMs: 2500`, `maxSteps: 20M`, below the engine's 4s/50M defaults) so an evil regex
+  fails fast in the worker instead of grinding, and a `gaveUp`/`truncated` run is surfaced as `partial`.
+- **Client per run, disposed in cleanup — StrictMode-safe and leak-free.** The client is created *inside*
+  the run effect and `dispose()`d in its cleanup. Under StrictMode's mount→cleanup→remount this leaves a
+  live client (a persistent client disposed on the fake unmount would break every dev run), and an
+  in-flight worker is cancelled+terminated on input change or unmount. The stable store uses a `useState`
+  lazy initializer; latest `program`/`layout`/`reducedMotion` are read from a ref synced in an effect, so
+  module expansion rebuilds the timeline via `setLayout` *without* re-running the engine or losing position.
+- **Marble owns the clock, never re-renders React at 60fps.** `Marble.tsx` reads `store.getState()` in a
+  single `useFrame`, calls one `tick(delta*1000)` per frame, and positions the mesh imperatively from
+  `poseAtIndex`. It lives inside the machine's `offset`/`scale` group so layout-space poses align with the
+  tracks. Under `frameloop="demand"` it invalidates each playing frame and subscribes to the store to
+  invalidate on any external change (load/play/scrub), so autoplay starts and a paused scrub still repaints;
+  when playback ends, `tick` early-returns and the loop rests at the final pose.
+- **Reduced motion respected.** Autoplay is skipped when the user prefers reduced motion; the marble still
+  renders at the start pose (hopper) and awaits manual transport (step 7).
+- **Verified in a real browser.** The existing Playwright `static.spec.ts` (all 9 presets, desktop) passes
+  with zero page/console errors, confirming the worker run + marble introduce no runtime failures and the
+  machine still renders; production build emits the `engine.worker` chunk. Logic correctness for presets
+  1–5 playing end to end is already covered headlessly by step 5.
