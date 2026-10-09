@@ -25,10 +25,10 @@ export type NativeResponse = NativeResponseSuccess | NativeResponseError;
 self.onmessage = (event: MessageEvent<NativeRequest>) => {
   const { id, pattern, flags, input } = event.data;
   const cleanFlags = flags.replace(/[gd]/g, '');
-  const t0 = performance.now();
   try {
     const re = new RegExp(pattern, cleanFlags);
     re.lastIndex = 0;
+    const t0 = performance.now();
     const match = re.exec(input);
     const elapsedMs = performance.now() - t0;
     const response: NativeResponseSuccess = {

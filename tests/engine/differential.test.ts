@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
 import { parsePattern, PatternError } from '../../src/engine/parse.ts';
 import { runBacktrack } from '../../src/engine/backtrack.ts';
-import { genCase, renderPattern } from './gen.ts';
+import { genCase, hasNativeEngineBug, renderPattern } from './gen.ts';
 import regressions from './regressions.json';
 
 const LONG = !!process.env.DIFF_LONG;
@@ -32,10 +32,7 @@ export function compareOne(
   flags: string,
   input: string,
 ): { ok: true; skipped?: boolean } | { ok: false; ours: unknown; theirs: unknown } {
-  // V8 bug (observed in V8 14.6): under the `v` flag a character class that follows a
-  // modifier group such as `(?i:…)` wrongly inherits the group's flags. Skip that corner.
-  if (flags.includes('v') && /\(\?[ims]*-?[ims]*:/.test(source)) return { ok: true, skipped: true };
-  const theirs = nativeOutcome(source, flags, input);
+  if (hasNativeEngineBug(source, flags)) return { ok: true, skipped: true };
   let ours: Outcome | null | 'error';
   try {
     const prog = parsePattern(source, flags);
@@ -48,6 +45,7 @@ export function compareOne(
     if (e instanceof PatternError && !e.unsupported) ours = 'error';
     else throw e;
   }
+  const theirs = nativeOutcome(source, flags, input);
   if (theirs === 'error' || ours === 'error') {
     return theirs === ours ? { ok: true } : { ok: false, ours, theirs };
   }
@@ -79,7 +77,7 @@ describe('differential: backtracking engine vs native RegExp.exec', () => {
         if (res.skipped) skipped++;
         else checked++;
       }),
-      { numRuns: NUM_RUNS, seed: LONG ? undefined : 20240607, endOnFailure: true },
+      { numRuns: NUM_RUNS, seed: 20240607, endOnFailure: true },
     );
     console.log(`differential (backtrack): checked=${checked} skipped=${skipped}`);
     expect(checked).toBeGreaterThan(NUM_RUNS * 0.9);

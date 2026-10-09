@@ -22,53 +22,61 @@ const cls = fc
   })
   .map((r): GenNode => ({ k: 'class', ...r }));
 const dot = fc.constant<GenNode>({ k: 'dot' });
-const esc = fc.constantFrom('\\d', '\\w', '\\s', '\\D', '\\W', '\\S', '\\n').map((c): GenNode => ({ k: 'esc', c }));
+const esc = fc
+  .constantFrom('\\d', '\\w', '\\s', '\\D', '\\W', '\\S', '\\n')
+  .map((c): GenNode => ({ k: 'esc', c }));
 const assertion = fc.constantFrom('^', '$', '\\b', '\\B').map((c): GenNode => ({ k: 'assert', c }));
 const backref = fc
   .record({ pick: fc.double({ min: 0, max: 1, noNaN: true, maxExcluded: true }), named: fc.boolean() })
   .map((r): GenNode => ({ k: 'backref', ...r }));
 const quantOp = fc.constantFrom('*', '+', '?', '{2}', '{1,2}', '{0,3}', '{2,}', '{0}', '{1}', '{0,1}');
 
-export const { pattern: genPattern } = fc.letrec<{ pattern: GenNode; atom: GenNode; piece: GenNode }>((tie) => ({
-  atom: fc.oneof(
-    { depthSize: 'small', withCrossShrink: true },
-    lit,
-    lit,
-    lit,
-    cls,
-    dot,
-    esc,
-    backref,
-    fc
-      .record({
-        mode: fc.constantFrom('cap', 'cap', 'named', 'non', 'mod') as fc.Arbitrary<'cap' | 'named' | 'non' | 'mod'>,
-        mod: fc.constantFrom('i', '-i', 'm', 's', 'i-m', 'ms-i'),
-        body: tie('pattern'),
-      })
-      .map((r): GenNode => ({ k: 'group', ...r })),
-    fc.record({ neg: fc.boolean(), body: tie('pattern') }).map((r): GenNode => ({ k: 'look', ...r })),
-  ),
-  piece: fc.oneof(
-    { depthSize: 'small' },
-    tie('atom'),
-    tie('atom'),
-    assertion,
-    fc
-      .record({ body: tie('atom'), q: quantOp, lazy: fc.boolean() })
-      .map((r): GenNode => ({ k: 'quant', ...r })),
-  ),
-  pattern: fc.oneof(
-    { depthSize: 'small' },
-    fc.array(tie('piece'), { minLength: 0, maxLength: 5 }).map((items): GenNode => ({ k: 'seq', items })),
-    fc.array(tie('piece'), { minLength: 1, maxLength: 4 }).map((items): GenNode => ({ k: 'seq', items })),
-    fc
-      .array(
-        fc.array(tie('piece'), { minLength: 0, maxLength: 3 }).map((items): GenNode => ({ k: 'seq', items })),
-        { minLength: 2, maxLength: 3 },
-      )
-      .map((branches): GenNode => ({ k: 'alt', branches })),
-  ),
-}));
+export const { pattern: genPattern } = fc.letrec<{ pattern: GenNode; atom: GenNode; piece: GenNode }>(
+  (tie) => ({
+    atom: fc.oneof(
+      { depthSize: 'small', withCrossShrink: true },
+      lit,
+      lit,
+      lit,
+      cls,
+      dot,
+      esc,
+      backref,
+      fc
+        .record({
+          mode: fc.constantFrom('cap', 'cap', 'named', 'non', 'mod') as fc.Arbitrary<
+            'cap' | 'named' | 'non' | 'mod'
+          >,
+          mod: fc.constantFrom('i', '-i', 'm', 's', 'i-m', 'ms-i'),
+          body: tie('pattern'),
+        })
+        .map((r): GenNode => ({ k: 'group', ...r })),
+      fc.record({ neg: fc.boolean(), body: tie('pattern') }).map((r): GenNode => ({ k: 'look', ...r })),
+    ),
+    piece: fc.oneof(
+      { depthSize: 'small' },
+      tie('atom'),
+      tie('atom'),
+      assertion,
+      fc
+        .record({ body: tie('atom'), q: quantOp, lazy: fc.boolean() })
+        .map((r): GenNode => ({ k: 'quant', ...r })),
+    ),
+    pattern: fc.oneof(
+      { depthSize: 'small' },
+      fc.array(tie('piece'), { minLength: 0, maxLength: 5 }).map((items): GenNode => ({ k: 'seq', items })),
+      fc.array(tie('piece'), { minLength: 1, maxLength: 4 }).map((items): GenNode => ({ k: 'seq', items })),
+      fc
+        .array(
+          fc
+            .array(tie('piece'), { minLength: 0, maxLength: 3 })
+            .map((items): GenNode => ({ k: 'seq', items })),
+          { minLength: 2, maxLength: 3 },
+        )
+        .map((branches): GenNode => ({ k: 'alt', branches })),
+    ),
+  }),
+);
 
 export interface Rendered {
   source: string;
@@ -106,7 +114,12 @@ export function renderPattern(root: GenNode): Rendered {
   countGroups(root, acc);
   let groupIdx = 0;
   const quantifiable = (n: GenNode): boolean =>
-    n.k === 'lit' || n.k === 'class' || n.k === 'dot' || n.k === 'esc' || n.k === 'group' || n.k === 'backref';
+    n.k === 'lit' ||
+    n.k === 'class' ||
+    n.k === 'dot' ||
+    n.k === 'esc' ||
+    n.k === 'group' ||
+    n.k === 'backref';
   const render = (n: GenNode): string => {
     switch (n.k) {
       case 'lit':
@@ -185,6 +198,17 @@ export function isRegular(n: GenNode): boolean {
     default:
       return true;
   }
+}
+
+export function hasNativeEngineBug(source: string, flags: string): boolean {
+  const modifiers = /\(\?(?:[ims]+(?:-[ims]+)?|-[ims]+):/.test(source);
+  if (flags.includes('v') && modifiers) return true;
+  if (modifiers && /\\[bB]/.test(source)) return true;
+  if (flags.includes('u') && /\(\?[ims]*-[ims]*i[ims]*:/.test(source)) return true;
+  const lazyDot = /\.(?:[*+?]|\{\d+(?:,\d*)?\})\?/.test(source);
+  const dotAll = flags.includes('s') || /\(\?[ims]*s[ims]*(?:-[ims]+)?:/.test(source);
+  const universalClass = ['[^]', '[\\s\\S]', '[\\w\\W]'].some((raw) => source.includes(raw));
+  return source.includes('^') && ((dotAll && lazyDot) || (universalClass && /(?:[*+?]|\})\?/.test(source)));
 }
 
 export const genCase = fc.record({ pattern: genPattern, input: genString, flags: genFlags });

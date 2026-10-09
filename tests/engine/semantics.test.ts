@@ -247,7 +247,35 @@ describe('semantics checklist (section 4.2)', () => {
     });
   });
 
-  // 10. {n,m} with large bounds must not allocate per possible iteration.
+  describe('scoped flags are restored after modifier groups', () => {
+    it.each([
+      ['(?-i:)[^A]+', 'iu', 'aB', 'B'],
+      ['(?i:(?:\\Ba\\n|[ab]|A\\bc))*', 'sy', 'bbAaA', 'bbAaA'],
+      ['(?i:[^A]{0,1}?(?<n1>\\Ba\\n|[ab]|A\\bc))*\\B|(\\B$..$)c[^a1]{0}', 'sy', '1bbAaA\nbc', '1bbAaA\nb'],
+      ['(?:(?ms-i:(([^^])\\1))[^a]*)?b*?(?:(?!.1{2}a{2})){2}', 'imuy', 'cc111c\n Aa', 'cc111c\n '],
+      ['a(^| |$){2} |(?-i:\\b|)[^A]+\\b|c', 'imuy', ' \na', ' \n'],
+    ])('/%s/%s preserves outer case folding on subsequent classes', (pattern, flags, input, text) => {
+      const { result } = runBacktrack(parsePattern(pattern, flags), input);
+      expect(result.gaveUp).toBe(false);
+      expect(result.matched).toBe(true);
+      expect(result.groups[0]).toBe(text);
+    });
+  });
+
+  it.each([
+    ['.{2,}?a^|', 'sy', 'Acc a1ba  '],
+    [' ??(.{2,}?^(c\\B)|[b-c1]*?)^', 'sy', 'cabac '],
+    ['[\\s\\S]*?a^|', '', 'cabac '],
+  ])(
+    '/%s/%s retains alternatives when an unbounded lazy scan fails a start assertion',
+    (pattern, flags, input) => {
+      const { result } = runBacktrack(parsePattern(pattern, flags), input);
+      expect(result.gaveUp).toBe(false);
+      expect(result.matched).toBe(true);
+      expect(result.groups[0]).toBe('');
+    },
+  );
+
   describe('10. Bounded repeat with large numbers', () => {
     it('executes {1000,2000} without allocating per iteration', () => {
       const str = 'a'.repeat(1500);

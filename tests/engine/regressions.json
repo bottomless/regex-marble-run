@@ -1,1 +1,18 @@
-[]
+[
+  { "pattern": "(?-i:)[^A]+", "flags": "iu", "input": "aB" },
+  {
+    "pattern": "(?:(?ms-i:(([^^])\\1))[^a]*)?b*?(?:(?!.1{2}a{2})){2}",
+    "flags": "imuy",
+    "input": "cc111c\n Aa"
+  },
+  { "pattern": "a(^| |$){2} |(?-i:\\b|)[^A]+\\b|c", "flags": "imuy", "input": " \na" },
+  { "pattern": ".{2,}?a^|", "flags": "sy", "input": "Acc a1ba  " },
+  { "pattern": " ??(.{2,}?^(c\\B)|[b-c1]*?)^", "flags": "sy", "input": "cabac " },
+  { "pattern": "[\\s\\S]*?a^|", "flags": "", "input": "cabac " },
+  { "pattern": "(?i:(?:\\Ba\\n|[ab]|A\\bc))*", "flags": "sy", "input": "bbAaA" },
+  {
+    "pattern": "(?i:[^A]{0,1}?(?<n1>\\Ba\\n|[ab]|A\\bc))*\\B|(\\B$..$)c[^a1]{0}",
+    "flags": "sy",
+    "input": "1bbAaA\nbc"
+  }
+]
