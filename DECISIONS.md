@@ -216,3 +216,23 @@ skeleton-only routing; the original milestone context is retained.
 - **Bounds and continuity are tested.** For every preset and edge-case pattern, every segment yields a
   finite pose at fractions 0/0.5/1, unit-length directions, travel poses stay inside their route's
   bounding box, and captures inherit the preceding resolvable pose.
+
+### Step 5: headless end-to-end integration (`tests/playback/integration.test.ts`)
+
+- **Compose steps 1–4 along the render-loop path, without React/Three.** The test drives the exact
+  sequence the scene will use: `parsePattern` → `runBacktrack` → `layout` → `store.load`, then a 60 fps
+  `tick(dt)` loop reading `(segmentIndex, fraction)` each frame and resolving it through `poseAtIndex`.
+  This proves presets 1–5 "play end to end" at the logic level before any scene wiring exists, so the
+  M5 done-criterion is verifiable in CI rather than only by eye in the browser.
+- **Frame-accurate invariants.** Every played frame has a finite marble pose, time is monotonically
+  non-decreasing, the read head stays in `[0, input.length]`, flag depth never goes negative, and the
+  terminal `tick` clamps the store exactly to `duration` with `atEnd` true and the final `machine.phase`
+  matching the engine result. The captured pre-terminal frame is deliberately *not* asserted equal to
+  `duration`; the loop breaks at the top once `playing` flips false, so only the settled store state is
+  at the endpoint.
+- **End state matches the engine.** Final captures reproduce `result.index/end` and every group's text;
+  a match lands the marble on the `cup` piece and a nomatch on the `rejectTray`, tying motion back to the
+  authoritative engine result.
+- **Determinism under scrubbing.** Stepping to every event yields a finite pose, and seeking events
+  backward reconstructs the identical `machine` sequence as forward — confirming the keyframed cursor has
+  no path-dependent drift, which is what makes the timeline scrubber safe to ship.
