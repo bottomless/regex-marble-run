@@ -49,3 +49,20 @@ Choices made where the brief was ambiguous or where reality disagreed with the p
   and ignores stale results. It returns structured timeout/cancellation/error states; HUD presentation
   remains in M6, and side-by-side rendering remains in M7.
 - **Scope.** This change implements M2 only; the existing canvas scaffold stays unchanged.
+
+## M3: Pure layout and routing
+
+- **Grid and pitch.** Sequences stack vertically. Alternation and repetition lanes use a 4-unit base pitch,
+  with a 5-unit minimum branch pitch after considering measured width and depth. Gates are 1.2 units.
+  Long sequences fold into switchbacks after six children.
+- **Placement algorithm.** Every IR subtree is measured first, then placed into a lane. Branch translation
+  moves the subtree's pieces, track points, and anchor metadata together. A final local offset guarantees
+  separation for narrow assertion branches. This keeps the pure box model simple and passed 300 fixed-seed
+  fuzzed layouts without gate overlaps.
+- **Complexity guard.** Above 80 leaves, large capturing groups collapse to module placeholders; 160 leaves
+  is the hard "too big to build" cap. These constants are provisional until M4 rendering proves readability.
+- **Routing graph.** M3 builds a valid directed routing skeleton: every anchor connects entry to exit, nodes
+  chain in IR order, and hopper/cup boundary points connect the root. A full physical return-rail graph is
+  M4/M5 work when return behavior is animated.
+- **Debug view.** `?debug=layout&p=...&f=...` renders a top-down SVG projection for layout inspection. It is
+  intentionally unstyled relative to the final art direction and does not affect the normal app shell.

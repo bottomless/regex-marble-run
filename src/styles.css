@@ -1,1 +1,66 @@
-html, body, #root { height: 100%; margin: 0; }
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  background: #14161a;
+  color: #e6e8eb;
+}
+
+.app-status {
+  padding: 1rem;
+  font-size: 0.9rem;
+  color: #9aa0a8;
+}
+
+.debug-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.debug-header {
+  padding: 0.4rem 0.75rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.8rem;
+  color: #9aa0a8;
+  border-bottom: 1px solid #2a2e35;
+}
+
+.debug-error {
+  margin: 1rem;
+  padding: 0.5rem 0.75rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.85rem;
+  color: #ff9c9c;
+  border: 1px solid #d94848;
+  border-radius: 4px;
+}
+
+.debug-svg {
+  flex: 1;
+  width: 100%;
+  background: #0d0f12;
+}
+
+.debug-edge {
+  stroke: #454b54;
+  stroke-width: 0.06;
+}
+
+.debug-point {
+  fill: #c8ccd2;
+}
+
+.debug-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.55px;
+  fill: #e6e8eb;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  pointer-events: none;
+}
