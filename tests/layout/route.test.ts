@@ -88,6 +88,89 @@ describe('routePath', () => {
     expect(routePath(g, 0, 7)).toBeNull();
   });
 
+  it.each([-1, 2, 0.5, NaN, Infinity])(
+    'rejects invalid source/target indices %s, including trivial routes',
+    (index) => {
+      const g = graph([pt(0, 0, 0), pt(1, 1, 0)], [[0, 1]]);
+      expect(routePath(g, index, 0)).toBeNull();
+      expect(routePath(g, 0, index)).toBeNull();
+      expect(routePath(g, index, index)).toBeNull();
+    },
+  );
+
+  it('ignores invalid graph edges safely', () => {
+    const g = graph(
+      [pt(0, 0, 0), pt(1, 1, 0)],
+      [
+        [0, -1],
+        [9, 1],
+        [0, 0.5],
+        [0, 1],
+      ],
+    );
+    expect(routePath(g, 0, 1)).toEqual([0, 1]);
+  });
+
+  it('prefers actual polyline length over endpoint chord length', () => {
+    const g = graph(
+      [pt(0, 0, 0), pt(1, 1, 0), pt(2, 2, 0)],
+      [
+        [0, 2],
+        [0, 1],
+        [1, 2],
+      ],
+    );
+    g.edges[0].length = 20;
+    g.edges[1].length = 1.5;
+    g.edges[2].length = 1.5;
+    expect(routePath(g, 0, 2)).toEqual([0, 1, 2]);
+  });
+
+  it('does not expose cached arrays and scopes caches to each graph', () => {
+    const g = graph(
+      [pt(0, 0, 0), pt(1, 1, 0), pt(2, 2, 0)],
+      [
+        [0, 1],
+        [1, 2],
+      ],
+    );
+    const first = routePath(g, 0, 2)!;
+    first[0] = 999;
+    first.push(999);
+    expect(routePath(g, 0, 2)).toEqual([0, 1, 2]);
+    const next = routePath(g, 0, 2)!;
+    next.length = 0;
+    expect(routePath(g, 0, 2)).toEqual([0, 1, 2]);
+    const different = graph(g.points, [[0, 2]]);
+    expect(routePath(different, 0, 2)).toEqual([0, 2]);
+    expect(routePath(g, 0, 2)).toEqual([0, 1, 2]);
+  });
+
+  it('invalidates structural caches when graph arrays or their sizes change', () => {
+    const g = graph([pt(0, 0, 0), pt(1, 1, 0), pt(2, 2, 0)], [[0, 1]]);
+    expect(routePath(g, 0, 2)).toBeNull();
+    g.edges.push({ from: 1, to: 2, piece: 1 });
+    expect(routePath(g, 0, 2)).toEqual([0, 1, 2]);
+    g.edges = [{ from: 0, to: 2, piece: 0 }];
+    expect(routePath(g, 0, 2)).toEqual([0, 2]);
+  });
+
+  it('handles zero-length cycles and ignores invalid length weights', () => {
+    const g = graph(
+      [pt(0, 0, 0), pt(1, 0, 0), pt(2, 1, 0)],
+      [
+        [0, 1],
+        [1, 0],
+        [1, 2],
+        [0, 2],
+        [0, 2],
+      ],
+    );
+    g.edges[3].length = -1;
+    g.edges[4].length = NaN;
+    expect(routePath(g, 0, 2)).toEqual([0, 1, 2]);
+  });
+
   it('routes around a dead end', () => {
     const g = graph(
       [pt(0, 0, 0), pt(1, 1, 0), pt(2, 0, 2), pt(3, 2, 1)],

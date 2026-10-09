@@ -52,6 +52,9 @@ Choices made where the brief was ambiguous or where reality disagreed with the p
 
 ## M3: Pure layout and routing
 
+These are the historical M3 choices. M4 below supersedes the provisional cap, placement details, and
+skeleton-only routing; the original milestone context is retained.
+
 - **Grid and pitch.** Sequences stack vertically. Alternation and repetition lanes use a 4-unit base pitch,
   with a 5-unit minimum branch pitch after considering measured width and depth. Gates are 1.2 units.
   Long sequences fold into switchbacks after six children.
@@ -66,3 +69,50 @@ Choices made where the brief was ambiguous or where reality disagreed with the p
   M4/M5 work when return behavior is animated.
 - **Debug view.** `?debug=layout&p=...&f=...` renders a top-down SVG projection for layout inspection. It is
   intentionally unstyled relative to the final art direction and does not affect the normal app shell.
+
+## M4: Physical layout and static workshop
+
+- **Pure measure/place model.** Layout remains independent of React and Three.js: measure each IR
+  subtree's local pieces, ports, curves, and bounds before recursively placing it. Branches use
+  measured extents with a 2.4-unit gap; sequences of more than six children fold into compact
+  descending switchbacks only when every child is a leaf. Graph edges reference physical pieces
+  with matching endpoints, not synthetic entry-to-exit shortcuts. Centripetal spline bounds include
+  overshoot; ordinary tracks descend, while rear backtrack and repetition lifts may rise.
+- **Continuation backtracks and scoped scouts.** Outstanding alternation/repetition choices propagate
+  through sequence and group continuations. Later failures have rear return rails and back lifts to
+  earlier choices, unwinding nested choices without crossing mutually exclusive branches. Repeats
+  have side bypasses and rear loop lifts. Lookahead keeps a nonconsuming main path and connected
+  ghost scout tracks; scout choices stay within the assertion rather than escaping into the main
+  continuation. Routing uses cached directed shortest paths weighted by stored polyline lengths;
+  trace-driven route selection and animation remain M5 work.
+- **Current complexity limits.** Above 80 leaves in the original program, non-root capturing or
+  noncapturing groups containing more than 12 leaves collapse to expandable modules unless their
+  IDs were explicitly expanded. Descendant IR anchors map to the module's ports while collapsed.
+  Expansion rebuilds layout and can reveal nested modules; pointer clicks and ordinary DOM buttons
+  both support it. The hard cap is now 320 original leaves, checked before collapse, replacing M3's
+  provisional 160; collapsing cannot bypass the cap.
+- **Demand-rendered, local WebGL assets.** React Three Fiber renders on demand with DPR capped at 1.5,
+  local lights and a generated Lightformer environment rather than a remote HDR preset. Bundled IBM
+  Plex fonts and procedurally generated wood textures avoid required external asset requests.
+  Track tubes are merged by material finish; repeated gate, sensor, diverter, and funnel hardware is
+  instanced. Labels and individual decorative pieces are not all batched. Geometry, textures, and
+  materials have explicit disposal paths.
+- **Local glyphs instead of drei `Text`.** The brief's required `Text` component is deliberately
+  replaced by canvas-drawn `CanvasTexture` glyph planes to avoid its remote Unicode font-fallback
+  asset path. Labels use bundled IBM Plex Mono with browser-local monospace fallback, not a remote
+  font service. This keeps glyph generation local but does not guarantee coverage for every Unicode
+  character on every system.
+- **Overview and close inspection.** The display scales and centers layout to a normalized workshop
+  footprint, then frames both machine and base for the viewport, reserving space for desktop controls.
+  This is an overview, not a promise that every dense-pattern glyph is readable without closer zoom.
+  Orbit, pan, and zoom permit close inspection. With the canvas focused, arrows orbit, Shift + arrows
+  pan, + / - zoom, and R resets; the Reset view button and module-expansion buttons provide DOM
+  controls. Reduced motion disables orbit damping and the brief build-settling animation.
+- **Static scope.** M4 builds the physical machine and input tiles, but does not run trace-driven marble
+  playback. The short build-settling transition is presentation only; the UI explicitly says
+  "Static build · playback arrives in M5". Engine/native-worker runtime validation is separate from
+  static-scene rendering tests.
+- **Fallback and debug flags.** WebGL creation or scene-render failure shows the SVG layout using the
+  current program source and flags. The standalone `?debug=layout&p=...&flags=...` view remains
+  available; legacy `f` is an alias, with `flags` taking precedence when present. Oversize layouts
+  report the build error instead of attempting to render a scene.

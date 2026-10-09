@@ -33,6 +33,7 @@ export interface Piece {
   rotation?: number;
   label?: string;
   points?: Vec3[];
+  containedNodes?: number[];
   role?: 'alternation' | 'repeat' | 'lazyRepeat' | 'capture' | 'assert' | 'look' | 'base';
 }
 
@@ -46,6 +47,7 @@ export interface TrackEdge {
   from: number;
   to: number;
   piece: number;
+  length?: number;
 }
 
 export interface LayoutGraph {

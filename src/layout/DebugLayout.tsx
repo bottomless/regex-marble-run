@@ -59,7 +59,11 @@ export function layoutViewBox(machine: MachineLayout, pad = 1): string {
 export function pieceShape(
   piece: Piece,
 ): { tag: 'path'; d: string } | { tag: 'rect'; x: number; y: number; w: number; h: number } {
-  if (piece.points && piece.points.length >= 2) {
+  if (
+    ['track', 'loopLift', 'backLift', 'returnRail', 'bypassChute'].includes(piece.kind) &&
+    piece.points &&
+    piece.points.length >= 2
+  ) {
     const pts = piece.points.map(project);
     const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x} ${p.y}`).join(' ');
     return { tag: 'path', d };
