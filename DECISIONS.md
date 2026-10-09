@@ -139,3 +139,29 @@ skeleton-only routing; the original milestone context is retained.
   `MachineState` snapshots. Counters are exposed per repeat `NodeId`; `iter` events are the single
   source of truth for the counter dials, so silent `REP_END` increments between events never
   desynchronise a restored state.
+
+### Step 2: timed motion timeline (`src/playback/timeline.ts`)
+
+- **One primary segment per event.** `buildTimeline(trace, layout, { speed })` walks the SoA trace and
+  emits an ordered segment list. Each trace event produces exactly one `primary` segment; motion
+  lead-ins (`roll` before a `gate`, `drop`/`lift` before a backtracking `flag` pop) are extra
+  non-primary segments sharing that event index. The primary segments therefore partition event
+  indices `0..length-1` exactly once, which is what the tests assert for coverage.
+- **Kind mapping.** `attempt`→`hop`, `test`→`gate`, `choose`→`flag`(plant), `backtrack`→`flag`(pop)
+  with a preceding `drop` onto the return rail and a rear-plane `lift` back to the flag, `iter`→`iter`,
+  `look`→`scout`, `capture`→`capture` (zero-duration marker), `match`/`nomatch`→`finish`. A `gate`
+  carries the decoded `pos`/`len`/`ok` so the renderer can light tiles without re-decoding the trace.
+- **Routing is best-effort.** Travel routes come from `routePath` between layout anchor points
+  (gate `entry`/`exit`, diverter `returnPort`). Where the graph has no directed path (hopper release,
+  cup finish, collapsed modules, or synthetic graphs) the segment simply omits `route` and the marble
+  component interpolates directly between anchor positions. Every stored route is a real graph path.
+- **Duration model.** Per-kind base times, with `roll` scaled by measured polyline length
+  (`ROLL_PER_UNIT_MS`, clamped to `[ROLL_MIN_MS, ROLL_MAX_MS]`), all divided by `speed`. Times
+  accumulate from `t0 = 0` and are contiguous (`segment[k].t0 === segment[k-1].t1`), so monotonicity
+  holds by construction. Speed `Infinity` ("instant") makes every duration `0` and marks all segments
+  `jump`; at `speed >= COLLAPSE_SPEED` (16) only travel kinds (`roll`/`drop`/`lift`) collapse to zero
+  so high-speed playback teleports the marble but still ticks gates and flags.
+- **Time↔event lookup.** `segmentAt(timeline, t)` binary-searches the active segment and returns an
+  interpolation `fraction` within it. The playback store composes this with the step-1 `TraceCursor`:
+  a segment's `event` maps to `stateAt(event + 1)` for the resulting machine state (head moved, flag
+  planted/popped), which the tests verify for `gate`, `flag`(pop) and `hop` segments.
