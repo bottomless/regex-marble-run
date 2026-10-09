@@ -195,3 +195,24 @@ skeleton-only routing; the original milestone context is retained.
 - **Safe when empty.** Before `load` (or after `reset`, or for an empty trace) every action is a
   no-op and `machine` falls back to `stateAt(0)` (idle), so the transport can mount before the first
   engine result arrives.
+
+### Step 4: motion solver (`src/playback/motion.ts`)
+
+- **Segment + fraction → 3D pose.** `poseForSegment(layout, segment, fraction)` returns a
+  `{ position, direction, moving }` marble pose with no React/Three.js dependency (plain `{x,y,z}`),
+  so it is unit-testable headlessly and reusable by the hero marble, follow camera and any trail.
+  Travel segments (`roll`/`drop`/`lift`) interpolate their stored `route` by arc length
+  (`pointAlongPolyline`) and are `moving`; stationary segments resolve to layout anchors: `gate` to
+  the node's `gate` (or the entry→exit midpoint) with a downward tangent, `flag`/`iter` to the
+  `diverter`/`gate`, `scout` to the look node, `hop` to the hopper piece, `finish` to the cup
+  (match) or reject tray (nomatch).
+- **Arc-length, not index, interpolation.** `pointAlongPolyline` accumulates segment lengths so a
+  given `fraction` maps to true distance travelled; this keeps marble speed visually constant across
+  unevenly spaced track points and is the same measure the layout uses for edge weights.
+- **Position-less segments hold.** `capture` markers carry no position and return `null`;
+  `poseAtIndex` walks backward to the last resolvable pose and holds it at that segment's end, so a
+  scrub or step landing on a capture never blanks the marble. `poseAtTime` composes `segmentAt` with
+  `poseAtIndex` for time-based lookup, clamping before the start and after the end.
+- **Bounds and continuity are tested.** For every preset and edge-case pattern, every segment yields a
+  finite pose at fractions 0/0.5/1, unit-length directions, travel poses stay inside their route's
+  bounding box, and captures inherit the preceding resolvable pose.
