@@ -165,3 +165,33 @@ skeleton-only routing; the original milestone context is retained.
   interpolation `fraction` within it. The playback store composes this with the step-1 `TraceCursor`:
   a segment's `event` maps to `stateAt(event + 1)` for the resulting machine state (head moved, flag
   planted/popped), which the tests verify for `gate`, `flag`(pop) and `hop` segments.
+
+### Step 3: transport store (`src/playback/store.ts`)
+
+- **Vanilla zustand, framework-free.** `createPlaybackStore()` returns a `zustand/vanilla` store with
+  no React or Three.js imports, so it is unit-testable headlessly and can later be bound to React with
+  `useStore`. It composes the step-1 `TraceCursor` (exact state) and the step-2 `Timeline` (timed
+  motion) and exposes transport state (`time`, `eventIndex`, `fraction`, `machine`, `playing`, `speed`,
+  `atStart`/`atEnd`) plus actions (`play`/`pause`/`toggle`, `stepForward`/`stepBack`, `seek`/
+  `seekFraction`/`seekEvent`, `setSpeed`, `setLayout`, `restart`, `tick`, `toggleFollow`).
+- **Authoritative position is (segment index, fraction), not raw time.** Because many events are
+  zero-duration (`capture` markers, collapsed travel at high speed), mapping a time back to an event
+  via `segmentAt` is ambiguous at boundaries. Discrete navigation (`seekEvent`, `stepForward`,
+  `stepBack`) therefore jumps directly to a segment index using a precomputed `eventSegment[e]` map,
+  and only continuous playback (`tick`) and scrubbing (`seek`/`seekFraction`) resolve time→segment.
+  This keeps single-step forward/back exact regardless of zero-length segments.
+- **Step = one event.** `stepForward`/`stepBack` move a whole trace event at a time (not a segment),
+  matching the brief's "single-step forward and back" over engine steps. The exposed `machine` is
+  `stateAt(eventIndex + 1)`, so stepping backward restores byte-identical state to stepping forward
+  to the same event (tested for every event of every preset).
+- **Speed changes preserve position.** `setSpeed` rebuilds the timeline at the new speed and restores
+  the current `(segment index, fraction)`, so the marble stays put while durations rescale; total
+  duration shrinks monotonically across the speed ladder and is `0` at instant. `setLayout` (e.g. a
+  module expand/collapse) rebuilds while preserving the current event.
+- **`tick` is pure and caller-driven.** The store never owns a clock; the render loop calls
+  `tick(deltaMs)` and the store advances `time`, stops at the end (`playing=false`, `atEnd=true`), and
+  only recomputes `machine` when the event index actually changes, so smooth within-segment playback
+  does not re-derive reducer state every frame.
+- **Safe when empty.** Before `load` (or after `reset`, or for an empty trace) every action is a
+  no-op and `machine` falls back to `stateAt(0)` (idle), so the transport can mount before the first
+  engine result arrives.

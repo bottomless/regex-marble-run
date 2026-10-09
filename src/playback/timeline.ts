@@ -188,11 +188,19 @@ export function buildTimeline(trace: Trace, layout: MachineLayout, opts: Timelin
   return { segments, duration: t, speed, eventCount: trace.length, collapsed, instant };
 }
 
-/** Segment active at time `t` (ms). Returns the last segment at/after the end. */
-export function segmentAt(timeline: Timeline, time: number): { segment: Segment; fraction: number } | null {
+export interface SegmentAt {
+  /** Index into `timeline.segments`. */
+  index: number;
+  segment: Segment;
+  /** 0..1 progress through the segment; 1 for zero-duration (jump) segments. */
+  fraction: number;
+}
+
+/** Segment active at time `t` (ms). Clamps to the first/last segment. */
+export function segmentAt(timeline: Timeline, time: number): SegmentAt | null {
   const { segments } = timeline;
   if (segments.length === 0) return null;
-  if (time <= segments[0].t0) return { segment: segments[0], fraction: 0 };
+  if (time <= segments[0].t0) return { index: 0, segment: segments[0], fraction: 0 };
   let lo = 0;
   let hi = segments.length - 1;
   while (lo < hi) {
@@ -203,5 +211,5 @@ export function segmentAt(timeline: Timeline, time: number): { segment: Segment;
   const seg = segments[lo];
   const span = seg.t1 - seg.t0;
   const fraction = span <= 0 ? 1 : Math.min(1, Math.max(0, (time - seg.t0) / span));
-  return { segment: seg, fraction };
+  return { index: lo, segment: seg, fraction };
 }
