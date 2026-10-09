@@ -116,3 +116,26 @@ skeleton-only routing; the original milestone context is retained.
   current program source and flags. The standalone `?debug=layout&p=...&flags=...` view remains
   available; legacy `f` is an alias, with `flags` taking precedence when present. Oversize layouts
   report the build error instead of attempting to render a scene.
+
+## M5: Playback
+
+### Step 1: trace state reducer (`src/playback/state.ts`)
+
+- **Flag-granularity snapshots.** The trace does not record capture or counter undos during an
+  unwind, so the reducer cannot follow `capture` events alone. Instead each planted flag stores a
+  copy of the capture table and repeat counters, and a `backtrack` event restores the snapshot of
+  the flag it pops, matching the engine's trail semantics at choice-point granularity. Look frames
+  snapshot the same state; on `look` end the snapshot is restored unless the look was a successful
+  positive lookahead (whose captures persist per spec), and the flag stack is truncated to the
+  event's recorded depth, which discards choice points planted inside the lookahead.
+- **Read head.** After a `test` event the head is `pos + len` on success and `pos` on failure,
+  matching the engine's `curPos`/advance behaviour; consumed tiles are therefore always
+  `[attemptStart, head)`.
+- **Untried flags survive a match.** The engine stops at `match` without unwinding its stack, so a
+  matched end state can still hold flags; only `nomatch` guarantees an empty stack.
+- **Keyframes every 512 events.** `TraceCursor.stateAt(i)` clones the nearest earlier keyframe and
+  applies at most 511 events, so seeking and single-stepping backward are O(keyframe interval)
+  instead of O(trace length). Keyframes store private drafts; callers only receive plain immutable
+  `MachineState` snapshots. Counters are exposed per repeat `NodeId`; `iter` events are the single
+  source of truth for the counter dials, so silent `REP_END` increments between events never
+  desynchronise a restored state.
