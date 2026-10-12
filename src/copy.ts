@@ -110,4 +110,16 @@ export const copy = {
   unknownError: 'This pattern could not be parsed.',
   flagLabel: (flag: string, description: string) => `${flag}: ${description}`,
   presetOption: (number: number, label: string) => `${String(number).padStart(2, '0')} · ${label}`,
+  transport: {
+    label: 'Playback transport controls',
+    play: 'Play',
+    pause: 'Pause',
+    restart: 'Restart from beginning',
+    stepBack: 'Step back one event',
+    stepForward: 'Step forward one event',
+    speed: 'Playback speed',
+    speedOption: (speed: number) => `${speed}×`,
+    scrubber: 'Timeline scrubber',
+    stepCount: (current: number, total: number) => `Event ${current} of ${total}`,
+  },
 } as const;

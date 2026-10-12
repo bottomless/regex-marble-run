@@ -262,3 +262,26 @@ skeleton-only routing; the original milestone context is retained.
   with zero page/console errors, confirming the worker run + marble introduce no runtime failures and the
   machine still renders; production build emits the `engine.worker` chunk. Logic correctness for presets
   1–5 playing end to end is already covered headlessly by step 5.
+
+### Step 7: playback transport controls (`src/playback/Transport.tsx`, `tests/e2e/playback.spec.ts`)
+
+- **Transport control bar overlay.** Built an accessible, styled playback deck mounted directly over the
+  stage with Play/Pause, Step Back, Step Forward, Restart, an event counter, a timeline scrubber, and
+  speed selector pills (0.5×, 1×, 2×, 4×). All buttons map directly to the zustand transport store
+  actions (`toggle()`, `stepBack()`, `stepForward()`, `restart()`, `seekEvent()`, `setSpeed()`).
+- **Zero render churn at 60fps.** `Transport.tsx` subscribes via individual primitive `useStore` selectors
+  (`playing`, `atStart`, `atEnd`, `speed`, `eventIndex`, `eventCount`, `hasTimeline`). Because continuous
+  motion values (`time`, `fraction`) are omitted, the React deck only re-renders when execution events
+  advance or button states toggle, leaving 60fps frame rendering entirely to Three.js / WebGL.
+- **Stage hit-testing enabled.** Changed `.workshop-stage` `z-index: -1` to `z-index: 0`. Negative z-index
+  inside `.workshop-shell`'s isolated stacking context placed the canvas and overlays behind the shell
+  background, blocking pointer events. Setting `z-index: 0` preserves DOM layering beneath `.control-island`,
+  `.stage-status`, and `.workshop-footer` while allowing interactive clicks and scrubber drags.
+- **Scrubbing by event index.** The timeline range input binds to `eventIndex` and dispatches `seekEvent(n)`.
+  This guarantees every scrub stops on an exact trace event boundary with consistent keyframed machine
+  state, rather than landing on fractional intermediate positions.
+- **Responsive positioning.** Sits centered horizontally at `bottom: 20px` on desktop, lifts to `bottom: 74px`
+  on tablet to clear the wrapped footer, and docks at `bottom: 8px` on mobile with a compact scrubber.
+- **Browser verification.** Added `tests/e2e/playback.spec.ts` asserting transport mounting, play/pause toggling,
+  stepping forward/backward, restarting, speed selection, and scrubbing across presets 1–5 in Chromium. All 4
+  playback tests and all 4 static tests pass (8/8 e2e).

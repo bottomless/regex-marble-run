@@ -9,6 +9,7 @@ import DebugLayout from '../layout/DebugLayout.tsx';
 import { copy } from '../copy.ts';
 import { usePlaybackController } from '../playback/usePlayback.ts';
 import type { PlaybackStore } from '../playback/store.ts';
+import Transport from '../playback/Transport.tsx';
 import { displayMetrics } from './geometry.ts';
 import { useMaterials } from './materials.ts';
 import Machine from './Machine.tsx';
@@ -198,6 +199,7 @@ function BuildWorkshop(props: WorkshopProps) {
               ))}
           </div>
         )}
+        <Transport store={playback.store} />
       </>
     </SceneBoundary>
   );
