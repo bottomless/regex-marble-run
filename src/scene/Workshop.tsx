@@ -9,6 +9,7 @@ import DebugLayout from '../layout/DebugLayout.tsx';
 import { copy } from '../copy.ts';
 import { usePlaybackController } from '../playback/usePlayback.ts';
 import type { PlaybackStore } from '../playback/store.ts';
+import { tileStatus } from '../playback/tiles.ts';
 import Transport from '../playback/Transport.tsx';
 import { displayMetrics } from './geometry.ts';
 import { useMaterials } from './materials.ts';
@@ -52,7 +53,25 @@ function Scene({
   useEffect(() => {
     canvas.setAttribute('data-pattern', program.source);
     canvas.setAttribute('data-pieces', String(machine.pieces.length));
-  }, [canvas, machine, program]);
+    const dispose = store.subscribe((s) => {
+      canvas.setAttribute('data-event-index', String(s.eventIndex));
+      canvas.setAttribute('data-event-count', String(s.eventCount));
+      if (s.machine) {
+        canvas.setAttribute('data-head', String(s.machine.head));
+        canvas.setAttribute('data-attempt-start', String(s.machine.attemptStart));
+        const lit: number[] = [];
+        for (let i = 0; i < input.length; i++) {
+          if (tileStatus(s.machine, i) !== 'pending') lit.push(i);
+        }
+        canvas.setAttribute('data-lit-tiles', lit.join(','));
+      } else {
+        canvas.setAttribute('data-head', '-1');
+        canvas.setAttribute('data-attempt-start', '-1');
+        canvas.setAttribute('data-lit-tiles', '');
+      }
+    });
+    return dispose;
+  }, [canvas, machine, program, store, input]);
   const metrics = useMemo(() => displayMetrics(machine), [machine]);
   const studio = dark ? '#22231f' : '#f3f0e8';
   return (

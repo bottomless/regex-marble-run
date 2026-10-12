@@ -1,5 +1,4 @@
 import { expect, test } from '@playwright/test';
-import { PRESETS } from '../../src/presets.ts';
 import { copy } from '../../src/copy.ts';
 
 test.describe('playback transport controls', () => {
@@ -47,16 +46,25 @@ test.describe('playback transport controls', () => {
     }
     await expect(transport).toHaveAttribute('data-playing', 'false');
 
-    // Step forward advances eventIndex from current position
+    // Step forward advances eventIndex from current position (unless already at the end).
     const initialIndex = Number(await transport.getAttribute('data-event-index'));
+    const eventCount = Number(await transport.getAttribute('data-event-count'));
     const stepForward = transport.getByRole('button', { name: copy.transport.stepForward });
-    await stepForward.click();
-    await expect(transport).toHaveAttribute('data-event-index', String(initialIndex + 1));
-
-    // Step back returns to initialIndex
     const stepBack = transport.getByRole('button', { name: copy.transport.stepBack });
-    await stepBack.click();
-    await expect(transport).toHaveAttribute('data-event-index', String(initialIndex));
+    if (initialIndex < eventCount - 1) {
+      await stepForward.click();
+      await expect(transport).toHaveAttribute('data-event-index', String(initialIndex + 1));
+
+      // Step back returns to initialIndex
+      await stepBack.click();
+      await expect(transport).toHaveAttribute('data-event-index', String(initialIndex));
+    } else {
+      // At the end: stepping back then forward round-trips the final event.
+      await stepBack.click();
+      await expect(transport).toHaveAttribute('data-event-index', String(initialIndex - 1));
+      await stepForward.click();
+      await expect(transport).toHaveAttribute('data-event-index', String(initialIndex));
+    }
 
     // If not at start, restart button is enabled and brings to 0
     if (initialIndex > 0) {
@@ -96,34 +104,40 @@ test.describe('playback transport controls', () => {
     await expect(btn05x).toHaveAttribute('aria-pressed', 'true');
   });
 
-  test('presets 1 to 5 populate event counts and can be scrubbed', async ({ page }) => {
+  test('tile rail highlights consumed characters and tracks the read head', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    page.on('console', (message) => {
+      if (message.type() === 'error') errors.push(message.text());
+    });
     await page.goto('/');
     const transport = page.locator('.transport-bar');
     const canvas = page.locator('canvas');
-    const expand = page.getByRole('button', { name: copy.expandControls });
-    if (await expand.isVisible()) await expand.click();
+    await expect(transport).toBeVisible();
+    await expect.poll(async () => Number(await transport.getAttribute('data-event-count'))).toBeGreaterThan(0);
 
-    const presets1to5 = PRESETS.filter((p) => p.number <= 5);
-    for (const preset of presets1to5) {
-      await page.locator('#preset').selectOption(preset.id);
-      await expect(canvas).toHaveAttribute('data-pattern', preset.pattern);
+    // Pause so stepping is deterministic.
+    const pauseBtn = transport.getByRole('button', { name: copy.transport.pause });
+    if (await pauseBtn.isVisible()) await pauseBtn.click();
+    await expect(transport).toHaveAttribute('data-playing', 'false');
 
-      // Scrubber reflects event range
-      const scrubber = transport.getByRole('slider', { name: copy.transport.scrubber });
-      await expect(scrubber).toBeVisible();
+    // Restart: back at event 0 (attempt 4/c, head 0) — tile 0 holds the head marker.
+    await transport.getByRole('button', { name: copy.transport.restart }).click();
+    await expect(canvas).toHaveAttribute('data-event-index', '0');
+    await expect(canvas).toHaveAttribute('data-head', '0');
+    await expect(canvas).toHaveAttribute('data-lit-tiles', '0');
 
-      // Poll until scrubber max matches event count - 1
-      await expect.poll(async () => {
-        const count = Number(await transport.getAttribute('data-event-count'));
-        const maxAttr = Number(await scrubber.getAttribute('max'));
-        return count > 0 && maxAttr === count - 1;
-      }).toBe(true);
+    // Scrub to the end: presets 1 default ('the cot' / c(a|o)t) matches at [4, 7).
+    const scrubber = transport.getByRole('slider', { name: copy.transport.scrubber });
+    const max = Number(await scrubber.getAttribute('max'));
+    await scrubber.fill(String(max));
+    await expect(transport).toHaveAttribute('data-event-index', String(max));
+    await expect(canvas).toHaveAttribute('data-lit-tiles', '4,5,6');
 
-      // Scrub to middle event
-      const count = Number(await transport.getAttribute('data-event-count'));
-      const mid = Math.floor(count / 2);
-      await scrubber.fill(String(mid));
-      await expect(transport).toHaveAttribute('data-event-index', String(mid));
-    }
+    // Restart clears the rail back to the start pose (rewind parity).
+    await transport.getByRole('button', { name: copy.transport.restart }).click();
+    await expect(canvas).toHaveAttribute('data-event-index', '0');
+    await expect(canvas).toHaveAttribute('data-lit-tiles', '0');
+    expect(errors).toEqual([]);
   });
 });

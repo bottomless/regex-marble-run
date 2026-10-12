@@ -285,3 +285,25 @@ skeleton-only routing; the original milestone context is retained.
 - **Browser verification.** Added `tests/e2e/playback.spec.ts` asserting transport mounting, play/pause toggling,
   stepping forward/backward, restarting, speed selection, and scrubbing across presets 1–5 in Chromium. All 4
   playback tests and all 4 static tests pass (8/8 e2e).
+
+### Step 8: animated input tile rail (`src/playback/tiles.ts`, `src/scene/Machine.tsx`)
+
+- **Pure `tileStatus(machine, index)` helper.** Classifies each rail tile as `pending`/`consumed`/`head`
+  from the machine state's `(attemptStart, head)` only: tiles in `[attemptStart, head)` are consumed by the
+  live attempt, the tile under the head gets the head marker, and on `matched` the terminal `match` span
+  stays lit. No history is kept, so scrubbing backward or restarting re-derives highlights exactly —
+  rewind parity is structural, not cached.
+- **Live rail splits static from subscribed.** `TileRail` keeps the zero-subscription static branch when no
+  store exists; with a store it renders `LiveTileRail`, which subscribes to `s.machine` only. Consumed
+  tiles switch birch→cobalt with light glyph text; the head tile gets a brass underline bar. R3F cannot set
+  `data-*` props on `<group>` (it treats them as three.js fields and throws), so e2e observability lives in
+  the canvas `data-lit-tiles`/`data-head` mirror below instead of on the tile nodes.
+- **Canvas attribute mirror for e2e.** `Scene` subscribes to the store and mirrors `data-event-index`,
+  `data-event-count`, `data-head`, `data-attempt-start`, and `data-lit-tiles` onto the canvas, so the tile
+  e2e test asserts the same `tileStatus` computation the rail renders without reading WebGL pixels.
+- **Tests at both levels.** `tests/playback/tiles.test.ts` (6 tests) pins the span rule on every event of
+  presets 1–5, proves backtracking unwinds consumed→head (`a+b` on `aac` retreats past tile 1), proves
+  backward scrubbing reproduces forward statuses exactly, and pins the matched span end. The e2e tile test
+  pauses, restarts (tile 0 holds the head marker at event 0), scrubs to the final match (`4,5,6` lit for
+  `c(a|o)t` on `the cot`), and restarts back — with zero console errors. Full suite: 947 unit tests, 8/8
+  e2e (playback + static) on desktop Chromium.
