@@ -7,7 +7,7 @@ import { gateMarkers, type GateMarker } from '../playback/gates.ts';
 import type { PlaybackStore } from '../playback/store.ts';
 
 const LAMP_OFFSET: Record<GateMarker['kind'], [number, number, number]> = {
-  gate: [0, 1.05, 0.27],
+  gate: [0, 0.84, -0.34],
   sensor: [0, -0.48, 0.22],
   scout: [0, -0.48, 0.22],
   mirror: [0, 0.62, 0.15],

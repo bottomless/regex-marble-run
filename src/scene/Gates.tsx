@@ -119,10 +119,13 @@ export default function Gates({
   machine,
   materials,
   program,
+  emphasis = 1,
 }: {
   machine: MachineLayout;
   materials: Materials;
   program: Program;
+  /** Uniform scale for the lettered tiles, so captions stay legible when a big machine is shrunk to fit. */
+  emphasis?: number;
 }) {
   const gates = useMemo(() => machine.pieces.filter((piece) => piece.kind === 'gate'), [machine]);
   const sensors = useMemo(
@@ -145,9 +148,8 @@ export default function Gates({
   const bulbs = useMemo(() => sensors.filter((piece) => piece.kind === 'sensor'), [sensors]);
   const geometry = useMemo(
     () => ({
-      post: new BoxGeometry(0.12, 0.72, 0.24),
-      feet: new BoxGeometry(0.26, 0.1, 0.45),
-      arch: new TorusGeometry(0.43, 0.075, 6, 18, Math.PI),
+      post: new BoxGeometry(0.14, 0.86, 0.3),
+      arch: new TorusGeometry(0.4, 0.05, 6, 18, Math.PI),
       sensor: new CylinderGeometry(0.45, 0.45, 0.16, 24),
       disc: new CylinderGeometry(0.33, 0.33, 0.06, 24),
       bulb: new SphereGeometry(0.07, 12, 8),
@@ -168,32 +170,20 @@ export default function Gates({
       <Hardware
         pieces={gates}
         geometry={geometry.post}
-        material={materials.brass}
-        offset={[-0.43, -0.21, 0.2]}
+        material={materials.tracks.edge}
+        offset={[-0.5, -0.32, 0.1]}
       />
       <Hardware
         pieces={gates}
         geometry={geometry.post}
-        material={materials.brass}
-        offset={[0.43, -0.21, 0.2]}
-      />
-      <Hardware
-        pieces={gates}
-        geometry={geometry.feet}
         material={materials.tracks.edge}
-        offset={[-0.43, -0.6, 0.2]}
-      />
-      <Hardware
-        pieces={gates}
-        geometry={geometry.feet}
-        material={materials.tracks.edge}
-        offset={[0.43, -0.6, 0.2]}
+        offset={[0.5, -0.32, 0.1]}
       />
       <Hardware
         pieces={gates}
         geometry={geometry.arch}
         material={materials.brass}
-        offset={[0, 0.15, 0.2]}
+        offset={[0, 0.12, 0.15]}
         color={highlightTint(lit)}
         onPieceHover={(piece) => hoverPiece(program, piece)}
       />
@@ -236,10 +226,25 @@ export default function Gates({
           const node = piece.node === null ? null : program.nodes[piece.node];
           const sensor = piece.kind === 'sensor' || piece.kind === 'scout';
           const pieceLit = piece.node !== null && lit.has(piece.node);
+          const labelLength = [...(piece.label ?? '')].length;
+          const tileWidth = Math.max(1.4, Math.min(2.2, labelLength * 0.17 + 0.6));
+          const glyphSize =
+            piece.kind === 'gate'
+              ? labelLength <= 2
+                ? 0.56
+                : labelLength <= 4
+                  ? 0.44
+                  : labelLength <= 7
+                    ? 0.32
+                    : 0.24
+              : sensor
+                ? 0.4
+                : 0.29;
           return (
             <group
               key={i}
               position={[p.x, p.y, p.z]}
+              scale={piece.kind === 'gate' || sensor ? emphasis : 1}
               onPointerMove={(event) => {
                 event.stopPropagation();
                 hoverPiece(program, piece);
@@ -247,15 +252,26 @@ export default function Gates({
               onPointerOut={() => hoverPiece(program, null)}
             >
               {piece.kind === 'gate' ? (
-                <mesh
-                  position={[0, 0.74, 0.27]}
-                  material={pieceLit ? litMaterial : materials.tracks.birch}
-                  castShadow
-                >
-                  <boxGeometry
-                    args={[Math.max(0.9, Math.min(2.1, (piece.label?.length ?? 1) * 0.13 + 0.5)), 0.34, 0.14]}
-                  />
-                </mesh>
+                <>
+                  <mesh
+                    position={[0, 0, -0.34]}
+                    material={pieceLit ? litMaterial : materials.tile}
+                    castShadow
+                    receiveShadow
+                  >
+                    <boxGeometry args={[tileWidth, 1.5, 0.14]} />
+                  </mesh>
+                  <mesh position={[0, 0, -0.42]} material={materials.ink}>
+                    <boxGeometry args={[tileWidth + 0.08, 1.58, 0.02]} />
+                  </mesh>
+                  <mesh
+                    position={[0, 0.4, 0.3]}
+                    material={pieceLit ? litMaterial : materials.tile}
+                    castShadow
+                  >
+                    <boxGeometry args={[tileWidth, 0.8, 0.12]} />
+                  </mesh>
+                </>
               ) : !sensor ? (
                 <>
                   <mesh
@@ -279,10 +295,10 @@ export default function Gates({
                       : '?<='
                     : (piece.label ?? '')
                 }
-                position={[0, piece.kind === 'gate' ? 0.75 : 0, piece.kind === 'gate' ? 0.355 : 0.28]}
-                color={piece.kind === 'opaque' ? '#efe6d7' : '#34372f'}
-                size={piece.kind === 'gate' && (piece.label?.length ?? 0) > 7 ? 0.19 : 0.29}
-                width={2}
+                position={[0, piece.kind === 'gate' ? 0.4 : 0, piece.kind === 'gate' ? 0.37 : 0.28]}
+                color={piece.kind === 'opaque' ? '#efe6d7' : '#2a2520'}
+                size={glyphSize}
+                width={piece.kind === 'gate' ? tileWidth - 0.2 : 2}
               />
             </group>
           );

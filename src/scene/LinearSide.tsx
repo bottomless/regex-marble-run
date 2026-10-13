@@ -210,7 +210,12 @@ export default function LinearSide({
       <group position={[0, 0.6, 0]} scale={metrics.scale}>
         <group position={metrics.offset}>
           <Tracks machine={machine} materials={materials} />
-          <Gates machine={machine} materials={materials} program={program} />
+          <Gates
+            machine={machine}
+            materials={materials}
+            program={program}
+            emphasis={Math.min(1.3, Math.max(1, 0.75 / metrics.scale))}
+          />
           <Pieces machine={machine} program={program} materials={materials} onExpand={onExpand} />
           <ParallelMarbles machine={machine} sync={sync} materials={materials} reducedMotion={reducedMotion} />
         </group>

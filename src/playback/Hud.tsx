@@ -3,33 +3,48 @@ import type { PlaybackStore } from './store.ts';
 import { countersAt, waterlineAt } from './counters.ts';
 import { shouldFlood } from './flood.ts';
 import { syncLinear } from './linear.ts';
+import { captureSpans } from './captures.ts';
 import { copy, type ResultReading } from '../copy.ts';
+import type { Program } from '../engine/ir.ts';
+import { palette } from '../scene/materials.ts';
 
 export interface HudProps {
   store: PlaybackStore;
   reducedMotion: boolean;
+  program?: Program;
+  input?: string;
+  onHelp?: () => void;
+}
+
+function clip(text: string, max = 28): string {
+  return text.length > max ? `${text.slice(0, max)}…` : text;
 }
 
 /**
- * Small top-right readout of the run: steps and backtracks counted up to the current event, attempts,
- * flag stack depth, the browser's own RegExp time for the same input, and the final result once the
- * playhead reaches the end. Flooded runs show their engine totals directly.
+ * Top-right results card: steps and backtracks counted up to the current event, attempts, flag stack
+ * depth, the browser's own RegExp time for the same input, playback status, and the final result with
+ * the matched text and capture contents once the playhead reaches the end. Flooded runs show their
+ * engine totals directly.
  */
-export default function Hud({ store, reducedMotion }: HudProps) {
+export default function Hud({ store, reducedMotion, program, input = '', onHelp }: HudProps) {
   const counters = useStore(store, (s) => s.counters);
   const eventIndex = useStore(store, (s) => s.eventIndex);
   const attempts = useStore(store, (s) => s.machine?.attempts ?? 0);
   const depth = useStore(store, (s) => s.machine?.flags.length ?? 0);
+  const machine = useStore(store, (s) => s.machine);
   const result = useStore(store, (s) => s.result);
   const trace = useStore(store, (s) => s.trace);
   const atEnd = useStore(store, (s) => s.atEnd);
+  const playing = useStore(store, (s) => s.playing);
   const native = useStore(store, (s) => s.native);
   const linear = useStore(store, (s) => s.linear);
 
   const flood = Boolean(result && trace && shouldFlood(result, trace));
+  const floodFrame = useStore(store, (s) => s.flood);
+  const filling = flood && floodFrame !== null && result !== null && floodFrame.step < result.steps;
   const reading = counters ? countersAt(counters, eventIndex) : { steps: 0, backtracks: 0 };
-  const steps = flood && result ? result.steps : reading.steps;
-  const backtracks = flood && result ? result.backtracks : reading.backtracks;
+  const steps = filling ? floodFrame.step : flood && result ? result.steps : reading.steps;
+  const backtracks = filling ? floodFrame.backtracks : flood && result ? result.backtracks : reading.backtracks;
   const shownAttempts = flood && result ? result.attempts : attempts;
 
   let rightTests: number | null = null;
@@ -41,11 +56,21 @@ export default function Hud({ store, reducedMotion }: HudProps) {
   }
 
   let outcome: ResultReading = { kind: 'pending' };
-  if (result && (atEnd || flood)) {
+  if (result && !filling && (atEnd || flood)) {
     if (result.gaveUp) outcome = { kind: 'gaveUp' };
     else if (result.matched) outcome = { kind: 'match', start: result.index, end: result.end };
     else outcome = { kind: 'nomatch' };
   }
+  const status = !trace
+    ? copy.hud.status.loading
+    : filling
+      ? copy.hud.status.playing
+      : atEnd || flood
+        ? copy.hud.status.finished
+      : playing
+        ? copy.hud.status.playing
+        : copy.hud.status.paused;
+  const groups = outcome.kind === 'match' && program ? captureSpans(machine).slice(1) : [];
 
   return (
     <aside
@@ -63,32 +88,66 @@ export default function Hud({ store, reducedMotion }: HudProps) {
       data-right-steps={rightTests ?? undefined}
       data-right-finished={rightTests === null ? undefined : rightFinished}
     >
-      <dl>
-        <div className="hud-item" data-field="steps">
-          <dt>{copy.hud.labels.steps}</dt>
-          <dd>{copy.hud.count(steps)}</dd>
-        </div>
-        <div className="hud-item" data-field="backtracks">
-          <dt>{copy.hud.labels.backtracks}</dt>
-          <dd>{copy.hud.count(backtracks)}</dd>
-        </div>
-        <div className="hud-item" data-field="attempts">
-          <dt>{copy.hud.labels.attempts}</dt>
-          <dd>{copy.hud.count(shownAttempts)}</dd>
-        </div>
-        <div className="hud-item" data-field="flags">
-          <dt>{copy.hud.labels.flags}</dt>
-          <dd>{copy.hud.count(depth)}</dd>
-        </div>
-        <div className="hud-item" data-field="native">
-          <dt>{copy.hud.labels.native}</dt>
-          <dd>{native ? copy.hud.nativeTime(native) : '—'}</dd>
-        </div>
-        <div className="hud-item hud-item--result" data-field="result">
-          <dt>{copy.hud.labels.result}</dt>
-          <dd aria-live="polite">{copy.hud.result(outcome)}</dd>
-        </div>
-      </dl>
+      <div className="hud-card">
+        <dl>
+          <div className="hud-item" data-field="steps">
+            <dt>{copy.hud.labels.steps}</dt>
+            <dd>{copy.hud.count(steps)}</dd>
+          </div>
+          <div className="hud-item" data-field="backtracks">
+            <dt>{copy.hud.labels.backtracks}</dt>
+            <dd>{copy.hud.count(backtracks)}</dd>
+          </div>
+          <div className="hud-item" data-field="attempts">
+            <dt>{copy.hud.labels.attempts}</dt>
+            <dd>{copy.hud.count(shownAttempts)}</dd>
+          </div>
+          <div className="hud-item" data-field="flags">
+            <dt>{copy.hud.labels.flags}</dt>
+            <dd>{copy.hud.count(depth)}</dd>
+          </div>
+          <div className="hud-item" data-field="native">
+            <dt>{copy.hud.labels.native}</dt>
+            <dd>{native ? copy.hud.nativeTime(native) : '—'}</dd>
+          </div>
+          <div className="hud-item hud-item--result" data-field="result" data-outcome={outcome.kind}>
+            <dt>{copy.hud.labels.result}</dt>
+            <dd aria-live="polite">{copy.hud.result(outcome)}</dd>
+          </div>
+        </dl>
+        <p className="hud-status" data-status={playing || filling ? 'playing' : 'paused'}>
+          <span className="hud-status-dot" aria-hidden="true" />
+          {status}
+          {reducedMotion && <span className="motion-status"> · {copy.reducedMotion}</span>}
+        </p>
+        {outcome.kind === 'match' && (
+          <div className="hud-match">
+            <p className="hud-match-text">{copy.hud.matched(clip(input.slice(outcome.start, outcome.end)))}</p>
+            {groups.length > 0 && (
+              <ul className="hud-groups">
+                {groups.map((span, i) => (
+                  <li key={i}>
+                    <span
+                      className="hud-group-swatch"
+                      style={{ background: palette.captures[i % palette.captures.length] }}
+                      aria-hidden="true"
+                    />
+                    <span className="hud-group-name">{copy.hud.group(i + 1, program?.groupNames[i + 1] ?? null)}</span>
+                    <span className="hud-group-value">
+                      {span ? copy.hud.matched(clip(input.slice(span.start, span.end), 16)) : copy.hud.unset}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+        {onHelp && (
+          <button type="button" className="hud-help" onClick={onHelp}>
+            {copy.hud.help}
+          </button>
+        )}
+      </div>
       {linear.status !== 'off' && (
         <div className="hud-split" data-status={linear.status}>
           {linear.status === 'ready' && rightTests !== null ? (
@@ -120,7 +179,6 @@ export default function Hud({ store, reducedMotion }: HudProps) {
           )}
         </div>
       )}
-      {reducedMotion && <span className="motion-status">{copy.reducedMotion}</span>}
     </aside>
   );
 }

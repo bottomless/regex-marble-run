@@ -20,11 +20,11 @@ export default function Glyph({
   const texture = useMemo(() => {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d')!;
-    ctx.font = '400 56px "IBM Plex Mono", monospace';
+    ctx.font = '600 56px "IBM Plex Mono", monospace';
     canvas.width = Math.min(2048, Math.max(64, Math.ceil(ctx.measureText(text).width) + 24));
     canvas.height = 88;
     ctx.fillStyle = color;
-    ctx.font = '400 56px "IBM Plex Mono", monospace';
+    ctx.font = '600 56px "IBM Plex Mono", monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(text, canvas.width / 2, 46, canvas.width - 12);

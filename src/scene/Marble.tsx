@@ -7,7 +7,8 @@ import type { PlaybackStore } from '../playback/store.ts';
 import { poseAtIndex } from '../playback/motion.ts';
 import type { Materials } from './materials.ts';
 
-const MARBLE_RADIUS = 0.15;
+const MARBLE_RADIUS = 0.18;
+const MARBLE_LIFT = 0.1;
 
 /**
  * The hero marble. Drives the playback clock (one `tick` per rendered frame) and positions itself from
@@ -41,7 +42,7 @@ export default function Marble({
     if (pose) {
       const carried = riding ? carriedMarblePosition(riding.rail) : pose.position;
       mesh.visible = true;
-      mesh.position.set(carried.x, carried.y, carried.z);
+      mesh.position.set(carried.x, carried.y + MARBLE_LIFT, carried.z);
     } else {
       mesh.visible = false;
     }

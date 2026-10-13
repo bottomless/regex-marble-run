@@ -9,15 +9,15 @@ import {
 import type { TrackFinish } from './geometry.ts';
 
 export const palette = {
-  birch: '#dec69d',
-  edge: '#a1845a',
-  brass: '#c79c50',
+  birch: '#e6d4b2',
+  edge: '#9c7c52',
+  brass: '#c9a35c',
   steel: '#a5afac',
-  cobalt: '#365f99',
-  vermilion: '#b74730',
+  cobalt: '#3b63a6',
+  vermilion: '#c0432e',
   teal: '#2d8880',
   scout: '#8ea5a3',
-  captures: ['#377d76', '#ab734a', '#65759a', '#95634b'],
+  captures: ['#9b4a86', '#b8762f', '#4a62a8', '#a3503a'],
 };
 
 function woodTexture(): CanvasTexture {
@@ -57,8 +57,8 @@ export function useMaterials(dark: boolean) {
           new MeshStandardMaterial({
             color: color as string,
             map: key === 'birch' ? wood : null,
-            roughness: key === 'brass' ? 0.3 : key === 'steel' ? 0.36 : 0.66,
-            metalness: key === 'brass' || key === 'steel' ? 0.78 : 0.12,
+            roughness: key === 'brass' ? 0.5 : key === 'steel' ? 0.36 : 0.7,
+            metalness: key === 'brass' ? 0.35 : key === 'steel' ? 0.78 : 0.05,
             transparent: key === 'scout',
             opacity: key === 'scout' ? 0.58 : 1,
           }),
@@ -68,6 +68,8 @@ export function useMaterials(dark: boolean) {
       tracks,
       wood,
       board: new MeshStandardMaterial({ color: dark ? '#ad8c61' : '#d6bb8d', map: wood, roughness: 0.78 }),
+      backboard: new MeshStandardMaterial({ color: dark ? '#8d7352' : '#c9b08a', map: wood, roughness: 0.85 }),
+      tile: new MeshStandardMaterial({ color: dark ? '#c9a45a' : '#d9b366', map: wood, roughness: 0.72 }),
       brass: tracks.brass,
       steel: tracks.steel,
       ink: new MeshStandardMaterial({ color: '#34372f', roughness: 0.65 }),
@@ -79,6 +81,8 @@ export function useMaterials(dark: boolean) {
     () => () => {
       for (const material of Object.values(materials.tracks)) material.dispose();
       materials.board.dispose();
+      materials.backboard.dispose();
+      materials.tile.dispose();
       materials.ink.dispose();
       materials.marble.dispose();
       materials.mirror.dispose();

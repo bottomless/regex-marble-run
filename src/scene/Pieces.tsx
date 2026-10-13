@@ -32,24 +32,24 @@ function CaptureFrame({ piece, onHover }: { piece: Piece; onHover?: (piece: Piec
       {[-1, 1].map((side) => (
         <group key={side}>
           <mesh position={[(side * w) / 2, 0, 0]}>
-            <boxGeometry args={[0.06, h, 0.08]} />
+            <boxGeometry args={[0.14, h + 0.14, 0.14]} />
             <meshStandardMaterial color={color} roughness={0.45} metalness={0.25} />
           </mesh>
           <mesh position={[0, (side * h) / 2, 0]}>
-            <boxGeometry args={[w, 0.06, 0.08]} />
+            <boxGeometry args={[w + 0.14, 0.14, 0.14]} />
             <meshStandardMaterial color={color} roughness={0.45} metalness={0.25} />
           </mesh>
         </group>
       ))}
-      <mesh position={[-w / 2 + 0.4, h / 2 + 0.06, 0.03]}>
-        <boxGeometry args={[0.7, 0.4, 0.08]} />
+      <mesh position={[-w / 2 + 0.45, h / 2 + 0.08, 0.06]}>
+        <boxGeometry args={[0.9, 0.5, 0.14]} />
         <meshStandardMaterial color={color} roughness={0.5} />
       </mesh>
       <Glyph
         text={piece.label ?? ''}
-        position={[-w / 2 + 0.4, h / 2 + 0.06, 0.08]}
-        size={0.2}
-        width={0.65}
+        position={[-w / 2 + 0.45, h / 2 + 0.08, 0.14]}
+        size={0.26}
+        width={0.85}
         color="#f6f0e5"
       />
     </group>
@@ -138,6 +138,7 @@ export default function Pieces({
   const geometry = useMemo(
     () => ({
       diverter: new CylinderGeometry(0.52, 0.52, 0.24, 24),
+      housing: new BoxGeometry(1.4, 1.0, 0.14),
       funnel: new CylinderGeometry(0.48, 0.18, 0.24, 24),
       button: new CylinderGeometry(0.33, 0.33, 0.045, 24),
       lever: new BoxGeometry(0.28, 0.06, 0.1),
@@ -150,6 +151,12 @@ export default function Pieces({
     <group>
       {hardware.batches.map((batch) => (
         <group key={batch.finish}>
+          <Hardware
+            pieces={batch.diverters}
+            geometry={geometry.housing}
+            material={materials.tracks[batch.finish]}
+            offset={[0, 0, -0.34]}
+          />
           <Hardware
             pieces={batch.diverters}
             geometry={geometry.diverter}

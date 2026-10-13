@@ -7,8 +7,11 @@ export const MODULE_COLLAPSE_LEAVES = 80;
 export const HARD_LEAF_CAP = 320;
 
 const RADIUS = 0.25;
-const GAP = 1;
+const GAP = 0.8;
+const DROP = 2;
 const BRANCH_GAP = 2.4;
+/** Horizontal run between consecutive sequence items, so a sequence descends as a staircase. */
+export const STAIR_STEP = 2.4;
 type Bounds = MachineLayout['bounds'];
 type Ref = number | { child: number; port: 'entry' | 'exit' };
 interface Child {
@@ -88,9 +91,9 @@ export function layout(program: Program, options: { expandedModules?: number[] }
   const { anchor: root } = place(measured, builder, vec());
   const entry = builder.graph.points[root.entry].position;
   const exit = builder.graph.points[root.exit].position;
-  const hopper = addPoint(builder, add(entry, vec(0, 3, 0)), null);
-  const cup = addPoint(builder, add(exit, vec(0, -3, 0)), null);
-  const reject = addPoint(builder, add(exit, vec(3.5, -3, 0)), null);
+  const hopper = addPoint(builder, add(entry, vec(0, 2, 0)), null);
+  const cup = addPoint(builder, add(exit, vec(0, -1.8, 0)), null);
+  const reject = addPoint(builder, add(exit, vec(3.2, -1.8, 0)), null);
   connect(
     builder,
     'hopper',
@@ -119,7 +122,7 @@ export function layout(program: Program, options: { expandedModules?: number[] }
     null,
     root.exit,
     reject,
-    [add(exit, vec(2.6, -1.8, 0))],
+    [add(exit, vec(2.4, -1.1, 0))],
     'base',
     vec(2, 1, 2),
     builder.graph.points[reject].position,
@@ -250,7 +253,7 @@ function measure(node: IR, collapsed: Set<number>, depth: number, ghost: boolean
     plan.entry = localPoint(plan, vec());
     plan.exit = localPoint(
       plan,
-      diagonal ? vec(diagonal * 1.4, -0.08) : vec(0, node.kind === 'empty' ? -0.7 : -1.8),
+      diagonal ? vec(diagonal * 1.4, -0.08) : vec(0, node.kind === 'empty' ? -0.7 : -1.6),
     );
     const kind: PieceKind =
       node.kind === 'char'
@@ -298,11 +301,18 @@ function measure(node: IR, collapsed: Set<number>, depth: number, ghost: boolean
         }
       } else {
         let at = vec();
+        let direction = 1;
+        const reach = STAIR_STEP * Math.max(1, Math.ceil(Math.sqrt(node.items.length)));
         for (const child of node.items) {
           const measured = measure(child, collapsed, depth, ghost);
           plan.children.push({ plan: measured, offset: at });
           const exit = add(position(measured, measured.exit), at);
-          at = vec(exit.x, Math.min(exit.y, measured.bounds.min.y + at.y) - GAP, exit.z);
+          let x = exit.x + direction * STAIR_STEP;
+          if (Math.abs(x) > reach + 1e-9) {
+            direction = -direction;
+            x = exit.x + direction * STAIR_STEP;
+          }
+          at = vec(x, Math.min(exit.y, measured.bounds.min.y + at.y) - GAP, exit.z);
         }
       }
       if (!plan.children.length) {
@@ -347,16 +357,16 @@ function measure(node: IR, collapsed: Set<number>, depth: number, ghost: boolean
         BRANCH_GAP * Math.max(0, branches.length - 1);
       let x = -width / 2;
       for (const branch of branches) {
-        const offset = vec(x - branch.bounds.min.x, -2.6 - Math.max(0, branch.bounds.max.y));
+        const offset = vec(x - branch.bounds.min.x, -DROP - Math.max(0, branch.bounds.max.y));
         plan.children.push({ plan: branch, offset });
         x += branch.bounds.max.x - branch.bounds.min.x + BRANCH_GAP;
       }
       plan.entry = localPoint(plan, vec());
       const bottom = Math.min(
-        -2.6,
+        -DROP,
         ...plan.children.map((child) => child.plan.bounds.min.y + child.offset.y),
       );
-      plan.exit = localPoint(plan, vec(0, bottom - 2.6));
+      plan.exit = localPoint(plan, vec(0, bottom - DROP));
       decorateChoice(plan, ghost ? 'look' : 'alternation');
       for (let i = 0; i < branches.length; i++) {
         curve(plan, 'track', plan.entry, childRef(i, 'entry'), [], ghost ? 'look' : 'alternation');
@@ -373,10 +383,10 @@ function measure(node: IR, collapsed: Set<number>, depth: number, ghost: boolean
     }
     case 'repeat': {
       const body = measure(node.body, collapsed, depth, ghost);
-      const offset = vec(0, -2.6 - Math.max(0, body.bounds.max.y));
+      const offset = vec(0, -DROP - Math.max(0, body.bounds.max.y));
       plan.children.push({ plan: body, offset });
       plan.entry = localPoint(plan, vec());
-      plan.exit = localPoint(plan, vec(0, body.bounds.min.y + offset.y - 2.6));
+      plan.exit = localPoint(plan, vec(0, body.bounds.min.y + offset.y - DROP));
       const repeatRole = ghost ? 'look' : node.greedy ? 'repeat' : 'lazyRepeat';
       decorateChoice(plan, repeatRole);
       const bypassX = body.bounds.max.x + 2.4;
@@ -398,11 +408,11 @@ function measure(node: IR, collapsed: Set<number>, depth: number, ghost: boolean
     }
     case 'look': {
       const body = measure(node.body, collapsed, depth, true);
-      const offset = vec(2.4 - body.bounds.min.x, -2.6 - Math.max(0, body.bounds.max.y), -2.4);
+      const offset = vec(2.4 - body.bounds.min.x, -DROP - Math.max(0, body.bounds.max.y), -2.4);
       plan.children.push({ plan: body, offset });
       plan.entry = localPoint(plan, vec());
       const pass = localPoint(plan, vec(0, -1.4));
-      plan.exit = localPoint(plan, vec(0, body.bounds.min.y + offset.y - 2.6));
+      plan.exit = localPoint(plan, vec(0, body.bounds.min.y + offset.y - DROP));
       curve(plan, 'scout', plan.entry, pass, [], 'look', vec(1.4, 1, 1.2), node.negate ? '?!' : '?=');
       plan.gate = vec(0, -0.7);
       curve(plan, 'track', pass, plan.exit, [], 'look');

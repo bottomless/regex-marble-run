@@ -14,6 +14,7 @@ import { tileStatus } from '../playback/tiles.ts';
 import { captureSpans } from '../playback/captures.ts';
 import Transport from '../playback/Transport.tsx';
 import Hud from '../playback/Hud.tsx';
+import MachineParts from '../ui/MachineParts.tsx';
 import { displayMetrics, splitPlacement } from './geometry.ts';
 import { highlightStore } from '../ui/highlight.ts';
 import { useMaterials } from './materials.ts';
@@ -31,6 +32,7 @@ interface WorkshopProps {
   reducedMotion: boolean;
   resetKey: number;
   mode?: ViewMode;
+  onHelp?: () => void;
 }
 
 class SceneBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, { failed: boolean }> {
@@ -116,10 +118,10 @@ function Scene({
   return (
     <>
       <color attach="background" args={[studio]} />
-      <ambientLight intensity={dark ? 0.9 : 1.5} />
+      <ambientLight intensity={dark ? 1.0 : 1.7} />
       <directionalLight
-        position={[8, 17, 10]}
-        intensity={dark ? 3 : 4}
+        position={[6, 16, 14]}
+        intensity={dark ? 2.2 : 2.6}
         color="#fff0d8"
         castShadow
         shadow-mapSize={[1024, 1024]}
@@ -130,7 +132,7 @@ function Scene({
         shadow-bias={-0.0007}
         shadow-normalBias={0.04}
       />
-      <directionalLight position={[-9, 10, -4]} intensity={1.8} color="#e3eaf0" />
+      <directionalLight position={[-9, 10, 6]} intensity={1.4} color="#e3eaf0" />
       <Environment resolution={64}>
         <Lightformer
           intensity={4}
@@ -192,7 +194,7 @@ function Scene({
       <ContactShadows
         key={`${program.source}/${dark}/${machine.pieces.length}/${placement ? 'split' : 'single'}`}
         position={[0, 0, 0]}
-        opacity={dark ? 0.5 : 0.36}
+        opacity={dark ? 0.45 : 0.3}
         scale={placement ? 35 + framing.boardWidth : 35}
         blur={2.2}
         far={18}
@@ -253,12 +255,12 @@ function BuildWorkshop(props: WorkshopProps) {
           shadows="percentage"
           dpr={[1, 1.5]}
           frameloop="demand"
-          camera={{ position: [4, 10, 22], fov: 42 }}
+          camera={{ position: [2, 8, 24], fov: 36 }}
           gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
           fallback={fallback}
           onCreated={({ gl }) => {
             gl.toneMapping = ACESFilmicToneMapping;
-            gl.toneMappingExposure = 1.05;
+            gl.toneMappingExposure = 1.0;
             gl.domElement.tabIndex = 0;
             gl.domElement.setAttribute('aria-label', copy.scene.canvas);
             gl.domElement.setAttribute('role', 'img');
@@ -268,6 +270,7 @@ function BuildWorkshop(props: WorkshopProps) {
             <Scene {...props} machine={built.machine} store={playback.store} onExpand={expand} />
           </Suspense>
         </Canvas>
+        <MachineParts machine={built.machine} program={program} />
         {built.machine.pieces.some((piece) => piece.kind === 'module') && (
           <div className="module-tools" aria-label={copy.scene.expand}>
             {built.machine.pieces
@@ -279,7 +282,13 @@ function BuildWorkshop(props: WorkshopProps) {
               ))}
           </div>
         )}
-        <Hud store={playback.store} reducedMotion={props.reducedMotion} />
+        <Hud
+          store={playback.store}
+          reducedMotion={props.reducedMotion}
+          program={program}
+          input={props.input}
+          onHelp={props.onHelp}
+        />
         <Transport store={playback.store} />
         <Suspense fallback={null}>
           <TraceLog store={playback.store} input={props.input} reducedMotion={props.reducedMotion} />

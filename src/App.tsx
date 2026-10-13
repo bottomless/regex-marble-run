@@ -54,23 +54,6 @@ function useMediaQuery(query: string) {
   return useSyncExternalStore(subscribe, snapshot, () => false);
 }
 
-function PieceIcon({ kind }: { kind: (typeof copy.legend)[number]['kind'] }) {
-  return (
-    <svg className={`piece-icon piece-icon--${kind}`} viewBox="0 0 20 20" aria-hidden="true">
-      {kind === 'gate' && <path d="M4 17V9a6 6 0 0 1 12 0v8M2 17h5m6 0h5" />}
-      {kind === 'fork' && <path d="M10 3v5m0 0-6 6v3m6-9 6 6v3" />}
-      {kind === 'loop' && <path d="M15 6a6 6 0 1 0 1 7M15 2v5h-5" />}
-      {kind === 'capture' && <path d="M7 3H3v14h4m6-14h4v14h-4M7 10h6" />}
-      {kind === 'sensor' && (
-        <>
-          <circle cx="10" cy="8" r="4" />
-          <path d="M10 12v5M6 17h8" />
-        </>
-      )}
-    </svg>
-  );
-}
-
 function WorkshopApp() {
   const [initial] = useState(initialShare);
   const [draft, setDraft] = useState({ pattern: initial.pattern, flags: initial.flags });
@@ -187,6 +170,7 @@ function WorkshopApp() {
               reducedMotion={reducedMotion}
               resetKey={resetKey}
               mode={effectiveMode}
+              onHelp={() => setSheet('how')}
             />
           </Suspense>
         ) : (
@@ -206,6 +190,27 @@ function WorkshopApp() {
             <h1>{copy.brand}</h1>
           </div>
           <p className="descriptor">{copy.descriptor}</p>
+          <div className="preset-picker">
+            <span className="preset-picker-label" id="presets-label">
+              {copy.presetsLabel}
+            </span>
+            <button
+              type="button"
+              className="preset-open"
+              aria-labelledby="presets-label"
+              aria-expanded={presetsOpen}
+              data-current-preset={preset?.id}
+              onClick={() => setPresetsOpen(true)}
+            >
+              <span>{preset ? copy.presetOption(preset.number, preset.label) : copy.customPreset}</span>
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path d="M6 8l4 4 4-4" />
+              </svg>
+            </button>
+          </div>
+          {presetsOpen && (
+            <PresetSheet current={preset} onSelect={selectPreset} onClose={() => setPresetsOpen(false)} />
+          )}
           <div className="collapsed-preview">
             <span>
               <span className="sr-only">
@@ -238,102 +243,62 @@ function WorkshopApp() {
         </header>
 
         <div id="control-fields" className="control-fields">
-          <fieldset className="mode-toggle" aria-describedby={splitAvailable ? undefined : 'mode-note'} data-mode={effectiveMode}>
-            <legend className="sr-only">{copy.split.label}</legend>
-            {(['single', 'split'] as const).map((option) => (
-              <button
-                type="button"
-                key={option}
-                className="mode-option"
-                aria-pressed={effectiveMode === option}
-                disabled={option === 'split' && !splitAvailable}
-                onClick={() => setMode(option)}
-              >
-                {option === 'single' ? copy.split.single : copy.split.sideBySide}
-              </button>
-            ))}
-          </fieldset>
-          {eligibility && !eligibility.ok && (
-            <p id="mode-note" className="mode-note" role="status">
-              {copy.split.unavailable(eligibility.message)}
+          <div className="field-row field-row--pattern">
+            <div className="field-heading">
+              <label htmlFor="pattern">{copy.patternLabel}</label>
+              <span className="field-count">{copy.characterCount(draft.pattern.length, PATTERN_MAX)}</span>
+            </div>
+            <PatternField
+              value={draft.pattern}
+              flags={draft.flags}
+              program={parsed.program}
+              error={error}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  pattern: event.target.value.slice(0, PATTERN_MAX),
+                }))
+              }
+            />
+            <p id="pattern-hint" className="sr-only">
+              {copy.patternHint}
             </p>
-          )}
-          <div className="preset-picker">
-            <span className="preset-picker-label" id="presets-label">
-              {copy.presetsLabel}
-            </span>
-            <button
-              type="button"
-              className="preset-open"
-              aria-labelledby="presets-label"
-              aria-expanded={presetsOpen}
-              data-current-preset={preset?.id}
-              onClick={() => setPresetsOpen(true)}
-            >
-              <span>{preset ? copy.presetOption(preset.number, preset.label) : copy.customPreset}</span>
-              <svg viewBox="0 0 20 20" aria-hidden="true">
-                <path d="M6 8l4 4 4-4" />
-              </svg>
-            </button>
-          </div>
-          {presetsOpen && (
-            <PresetSheet current={preset} onSelect={selectPreset} onClose={() => setPresetsOpen(false)} />
-          )}
 
-          <div className="field-heading">
-            <label htmlFor="pattern">{copy.patternLabel}</label>
-            <span className="field-count">{copy.characterCount(draft.pattern.length, PATTERN_MAX)}</span>
+            <fieldset className="flag-controls" aria-describedby="unicode-hint">
+              <legend className="sr-only">{copy.flagsLabel}</legend>
+              <span className="flags-label" aria-hidden="true">
+                {copy.flagsLabel}
+              </span>
+              {FLAG_OPTIONS.map((flag) => (
+                <button
+                  type="button"
+                  key={flag}
+                  className="flag-chip"
+                  aria-pressed={draft.flags.includes(flag)}
+                  aria-label={copy.flagLabel(flag, copy.flags[flag])}
+                  title={copy.flags[flag]}
+                  onClick={() => toggleFlag(flag)}
+                >
+                  {flag}
+                </button>
+              ))}
+              {(['g', 'd'] as const).map((flag) => (
+                <button
+                  type="button"
+                  key={flag}
+                  className="flag-chip flag-chip--unavailable"
+                  disabled
+                  title={copy.unavailableFlags[flag]}
+                  aria-label={copy.flagLabel(flag, copy.unavailableFlags[flag])}
+                >
+                  {flag}
+                </button>
+              ))}
+            </fieldset>
+            <p id="unicode-hint" className="sr-only">
+              {copy.unicodeHint}
+            </p>
           </div>
-          <PatternField
-            value={draft.pattern}
-            flags={draft.flags}
-            program={parsed.program}
-            error={error}
-            onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                pattern: event.target.value.slice(0, PATTERN_MAX),
-              }))
-            }
-          />
-          <p id="pattern-hint" className="sr-only">
-            {copy.patternHint}
-          </p>
-
-          <fieldset className="flag-controls" aria-describedby="unicode-hint">
-            <legend className="sr-only">{copy.flagsLabel}</legend>
-            <span className="flags-label" aria-hidden="true">
-              {copy.flagsLabel}
-            </span>
-            {FLAG_OPTIONS.map((flag) => (
-              <button
-                type="button"
-                key={flag}
-                className="flag-chip"
-                aria-pressed={draft.flags.includes(flag)}
-                aria-label={copy.flagLabel(flag, copy.flags[flag])}
-                title={copy.flags[flag]}
-                onClick={() => toggleFlag(flag)}
-              >
-                {flag}
-              </button>
-            ))}
-            {(['g', 'd'] as const).map((flag) => (
-              <button
-                type="button"
-                key={flag}
-                className="flag-chip flag-chip--unavailable"
-                disabled
-                title={copy.unavailableFlags[flag]}
-                aria-label={copy.flagLabel(flag, copy.unavailableFlags[flag])}
-              >
-                {flag}
-              </button>
-            ))}
-          </fieldset>
-          <p id="unicode-hint" className="sr-only">
-            {copy.unicodeHint}
-          </p>
 
           {error && (
             <div id="pattern-error" className="pattern-error" role="status">
@@ -351,20 +316,22 @@ function WorkshopApp() {
             </div>
           )}
 
-          <div className="field-heading">
-            <label htmlFor="test-string">{copy.inputLabel}</label>
-            <span className="field-count">{copy.characterCount(input.length, STRING_MAX)}</span>
+          <div className="field-row field-row--input">
+            <div className="field-heading">
+              <label htmlFor="test-string">{copy.inputLabel}</label>
+              <span className="field-count">{copy.characterCount(input.length, STRING_MAX)}</span>
+            </div>
+            <textarea
+              id="test-string"
+              rows={1}
+              value={input}
+              maxLength={STRING_MAX}
+              spellCheck={false}
+              autoComplete="off"
+              autoCapitalize="off"
+              onChange={(event) => setInput(event.target.value.slice(0, STRING_MAX))}
+            />
           </div>
-          <textarea
-            id="test-string"
-            rows={2}
-            value={input}
-            maxLength={STRING_MAX}
-            spellCheck={false}
-            autoComplete="off"
-            autoCapitalize="off"
-            onChange={(event) => setInput(event.target.value.slice(0, STRING_MAX))}
-          />
 
           <div className="preset-note">
             <p>{preset?.caption ?? copy.customCaption}</p>
@@ -374,56 +341,65 @@ function WorkshopApp() {
               </a>
             )}
           </div>
-
-          <div className="share-row">
-            <button type="button" className="copy-link" onClick={() => void copyLink()} data-copied={copied}>
-              <svg viewBox="0 0 20 20" aria-hidden="true">
-                <path d="M8.5 11.5a3 3 0 0 0 4.2 0l3-3a3 3 0 0 0-4.2-4.2l-1 1" />
-                <path d="M11.5 8.5a3 3 0 0 0-4.2 0l-3 3a3 3 0 0 0 4.2 4.2l1-1" />
-              </svg>
-              {copy.share.copyLink}
-            </button>
-            <span className="share-status" role="status" aria-live="polite">
-              {copied === 'done' ? copy.share.copied : copied === 'failed' ? copy.share.failed : ''}
-            </span>
-          </div>
-
-          <div className="learn-row">
-            <button type="button" onClick={() => setSheet('legend')}>
-              {copy.legendTitle}
-            </button>
-            <button type="button" onClick={() => setSheet('how')}>
-              {copy.howItWorksTitle}
-            </button>
-          </div>
         </div>
       </section>
 
-      <footer className="workshop-footer">
-        <ul className="piece-legend" aria-label={copy.legendLabel}>
-          {copy.legend.map((piece) => (
-            <li key={piece.kind} title={piece.detail}>
-              <PieceIcon kind={piece.kind} />
-              <span>{piece.label}</span>
-              <span className="sr-only">
-                {': '}
-                {piece.detail}
-              </span>
-            </li>
+      <section className="tool-rail" aria-label={copy.toolsLabel}>
+        <fieldset className="mode-toggle" aria-describedby={splitAvailable ? undefined : 'mode-note'} data-mode={effectiveMode}>
+          <legend className="sr-only">{copy.split.label}</legend>
+          {(['single', 'split'] as const).map((option) => (
+            <button
+              type="button"
+              key={option}
+              className="mode-option"
+              aria-pressed={effectiveMode === option}
+              disabled={option === 'split' && !splitAvailable}
+              onClick={() => setMode(option)}
+            >
+              {option === 'single' ? copy.split.single : copy.split.sideBySide}
+            </button>
           ))}
-        </ul>
-        <div className="view-tools">
-          <div className="orbit-hints">
-            <p>{copy.orbitPointer}</p>
-            <p>{copy.orbitKeyboard}</p>
-          </div>
-          <button type="button" className="reset-view" onClick={() => setResetKey((key) => key + 1)}>
+        </fieldset>
+        <div className="share-row">
+          <button type="button" className="copy-link" onClick={() => void copyLink()} data-copied={copied}>
             <svg viewBox="0 0 20 20" aria-hidden="true">
-              <path d="M4 7a6 6 0 1 1 0 7M4 2v5h5" />
+              <path d="M8.5 11.5a3 3 0 0 0 4.2 0l3-3a3 3 0 0 0-4.2-4.2l-1 1" />
+              <path d="M11.5 8.5a3 3 0 0 0-4.2 0l-3 3a3 3 0 0 0 4.2 4.2l1-1" />
             </svg>
-            {copy.resetView}
+            {copy.share.copyLink}
+          </button>
+          <span className="share-status" role="status" aria-live="polite">
+            {copied === 'done' ? copy.share.copied : copied === 'failed' ? copy.share.failed : ''}
+          </span>
+        </div>
+        {eligibility && !eligibility.ok && (
+          <p id="mode-note" className="mode-note" role="status">
+            {copy.split.unavailable(eligibility.message)}
+          </p>
+        )}
+      </section>
+
+      <footer className="workshop-footer">
+        <div className="learn-row">
+          <button type="button" onClick={() => setSheet('legend')}>
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M3 5h9M3 10h14M3 15h6" />
+            </svg>
+            {copy.legendTitle}
+          </button>
+          <button type="button" onClick={() => setSheet('how')}>
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M4 4h12v12H4zM7.5 8.5h5M7.5 11.5h5" />
+            </svg>
+            {copy.howItWorksTitle}
           </button>
         </div>
+        <button type="button" className="reset-view" onClick={() => setResetKey((key) => key + 1)}>
+          <svg viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M4 7a6 6 0 1 1 0 7M4 2v5h5" />
+          </svg>
+          {copy.resetView}
+        </button>
       </footer>
       {sheet !== null && (
         <Suspense fallback={null}>

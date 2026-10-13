@@ -288,6 +288,10 @@ export default function Flood({
   });
 
   const settled = frame.step >= model.steps;
+  useEffect(() => {
+    store.getState().setFlood(frame);
+  }, [store, frame]);
+  useEffect(() => () => store.getState().setFlood(null), [store]);
   useLayoutEffect(() => {
     canvas.setAttribute('data-flood', 'true');
     canvas.setAttribute('data-flood-settled', String(settled));

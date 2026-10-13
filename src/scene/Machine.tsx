@@ -232,17 +232,26 @@ export function Base({ metrics, materials, label = copy.scene.base }: { metrics:
         )),
       )}
       {[-1, 1].map((side) => (
-        <group key={side} position={[side * (w / 2 - 0.55), 0.6 + h / 2, -d / 2 + 0.6]}>
-          <mesh material={materials.tracks.edge} castShadow>
-            <boxGeometry args={[0.2, h + 0.2, 0.28]} />
-          </mesh>
-          <mesh position={[0, -h / 2 + 0.04, 0.08]} material={materials.brass}>
-            <boxGeometry args={[0.45, 0.22, 0.45]} />
-          </mesh>
-        </group>
+        <mesh
+          key={side}
+          position={[side * (w / 2 - 0.5), 0.6, -d / 2 + 0.45]}
+          material={materials.tracks.edge}
+          castShadow
+        >
+          <boxGeometry args={[0.5, 0.2, 0.5]} />
+        </mesh>
       ))}
-      <mesh position={[0, h + 0.65, -d / 2 + 0.6]} material={materials.tracks.edge} castShadow>
-        <boxGeometry args={[w - 0.9, 0.16, 0.24]} />
+      <RoundedBox
+        args={[w - 0.7, h + 0.9, 0.16]}
+        radius={0.06}
+        smoothness={2}
+        position={[0, 0.6 + (h + 0.9) / 2, -d / 2 + 0.45]}
+        material={materials.backboard}
+        castShadow
+        receiveShadow
+      />
+      <mesh position={[0, h + 1.54, -d / 2 + 0.45]} material={materials.tracks.edge} castShadow>
+        <boxGeometry args={[w - 0.6, 0.1, 0.26]} />
       </mesh>
       <mesh position={[0, 0.28, d / 2 + 0.018]} material={materials.brass}>
         <boxGeometry args={[Math.min(4.6, w * 0.7), 0.24, 0.03]} />
@@ -291,7 +300,12 @@ export default function Machine({
       <group ref={building} position={[0, 0.6, 0]} scale={metrics.scale}>
         <group position={metrics.offset}>
           <Tracks machine={machine} materials={materials} />
-          <Gates machine={machine} materials={materials} program={program} />
+          <Gates
+            machine={machine}
+            materials={materials}
+            program={program}
+            emphasis={Math.min(1.3, Math.max(1, 0.75 / metrics.scale))}
+          />
           <Pieces
             machine={machine}
             program={program}

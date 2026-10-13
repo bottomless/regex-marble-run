@@ -3,7 +3,7 @@ import fc from 'fast-check';
 import { CatmullRomCurve3, TubeGeometry, Vector3 } from 'three';
 import { parsePattern, PatternError } from '../../src/engine/parse.ts';
 import { isLeaf, walk, type IR, type Program } from '../../src/engine/ir.ts';
-import { layout, LayoutError, HARD_LEAF_CAP } from '../../src/layout/layout.ts';
+import { layout, LayoutError, HARD_LEAF_CAP, STAIR_STEP } from '../../src/layout/layout.ts';
 import { routePath, anchorOrder } from '../../src/layout/route.ts';
 import type { MachineLayout, Piece, PieceKind, Vec3 } from '../../src/layout/pieces.ts';
 import { genCase, renderPattern } from '../engine/gen.ts';
@@ -369,11 +369,16 @@ describe('layout: geometry and structure', () => {
     expect(ml.pieces.some((piece) => piece.kind === 'returnRail' && piece.node === look.id)).toBe(true);
   });
 
-  it('folds only long simple sequences into descending compact grids', () => {
+  it('descends short sequences as a bounded staircase and folds long simple ones into compact grids', () => {
     const short = checkInvariants(parsePattern('abcdef', ''));
-    expect(
-      new Set(short.pieces.filter((piece) => piece.kind === 'gate').map((piece) => piece.position.x)).size,
-    ).toBe(1);
+    const shortGates = short.pieces.filter((piece) => piece.kind === 'gate');
+    expect(new Set(shortGates.map((piece) => piece.position.x)).size).toBeGreaterThan(1);
+    expect(Math.max(...shortGates.map((piece) => piece.position.x))).toBeLessThanOrEqual(
+      STAIR_STEP * Math.ceil(Math.sqrt(6)) + 1e-8,
+    );
+    for (let i = 1; i < shortGates.length; i++) {
+      expect(shortGates[i].position.y).toBeLessThan(shortGates[i - 1].position.y);
+    }
     for (const length of [7, 75, 300]) {
       const ml = checkInvariants(parsePattern('a'.repeat(length), ''));
       expect(ml.bounds.max.x - ml.bounds.min.x).toBeLessThan(50);
@@ -385,8 +390,10 @@ describe('layout: geometry and structure', () => {
     const program = parsePattern('a+b+c+d+e+f+g+', '');
     const ml = checkInvariants(program);
     const repeats = [...walk(program.root)].filter((node) => node.kind === 'repeat');
-    expect(new Set(repeats.map((node) => ml.graph.points[ml.anchors[node.id].entry].position.x)).size).toBe(
-      1,
+    const entries = repeats.map((node) => ml.graph.points[ml.anchors[node.id].entry].position);
+    expect(new Set(entries.map((point) => point.x)).size).toBeGreaterThan(1);
+    expect(Math.max(...entries.map((point) => Math.abs(point.x)))).toBeLessThanOrEqual(
+      STAIR_STEP * Math.ceil(Math.sqrt(7)) + 1e-8,
     );
   });
 });

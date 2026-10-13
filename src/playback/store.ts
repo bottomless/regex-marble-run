@@ -7,6 +7,7 @@ import { DEFAULT_KEYFRAME_EVERY, TraceCursor, type MachineState } from './state.
 import { buildTimeline, segmentAt, INSTANT, type Timeline } from './timeline.ts';
 import { buildCounters, type NativeTiming, type RunCounters } from './counters.ts';
 import type { LinearRun } from './linear.ts';
+import type { FloodFrame } from './flood.ts';
 
 export interface PlaybackLoadInput {
   program: Program;
@@ -40,6 +41,8 @@ export interface PlaybackState {
   native: NativeTiming | null;
   /** Linear-time run for the side-by-side view; null in single mode or while the Pike engine runs. */
   linear: LinearState;
+  /** Sampled flood frame the tank is currently showing, so the HUD can count along; null outside floods. */
+  flood: FloodFrame | null;
   timeline: Timeline | null;
   /** eventStarts[e] = time (ms) the first segment of event `e` begins; entry [eventCount] is duration. */
   eventStarts: number[];
@@ -77,6 +80,7 @@ export interface PlaybackState {
   toggleFollow(): void;
   setNative(native: NativeTiming | null): void;
   setLinear(linear: LinearState): void;
+  setFlood(flood: FloodFrame | null): void;
 }
 
 export type PlaybackStore = StoreApi<PlaybackState>;
@@ -217,6 +221,7 @@ export function createPlaybackStore(): PlaybackStore {
       counters: null,
       native: null,
       linear: { status: 'off' },
+      flood: null,
       timeline: null,
       eventStarts: [],
       eventSegment: [],
@@ -371,6 +376,10 @@ export function createPlaybackStore(): PlaybackStore {
 
       setLinear(linear) {
         set({ linear });
+      },
+
+      setFlood(flood) {
+        if (get().flood !== flood) set({ flood });
       },
     };
   });

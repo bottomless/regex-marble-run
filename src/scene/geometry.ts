@@ -23,7 +23,7 @@ export interface DisplayMetrics {
   tank: TankPlacement | null;
 }
 
-export const TANK_SPAN = 2.6;
+export const TANK_SPAN = 2.1;
 export const SPLIT_GAP = 1.4;
 
 export interface SplitPlacement {
@@ -69,7 +69,7 @@ export function displayMetrics(machine: MachineLayout, options: { flood?: boolea
   const depth = Math.max(1, max.z - min.z);
   const scale = 11 / Math.max(height, width * 0.85, depth);
   const scaledHeight = height * scale;
-  const baseBoardWidth = Math.max(6.5, width * scale + 2.4);
+  const baseBoardWidth = Math.max(6.5, width * scale + 2);
   const boardWidth = options.flood ? baseBoardWidth + TANK_SPAN : baseBoardWidth;
   return {
     scale,
@@ -78,15 +78,15 @@ export function displayMetrics(machine: MachineLayout, options: { flood?: boolea
     height: scaledHeight,
     depth: depth * scale,
     boardWidth,
-    boardDepth: Math.max(4.4, depth * scale + 2.8),
+    boardDepth: Math.max(4, depth * scale + 2.6),
     tank: options.flood
       ? {
           x: boardWidth / 2 - TANK_SPAN / 2,
           z: 0,
-          width: 2,
-          depth: 2,
-          height: Math.min(5.5, Math.max(3, scaledHeight * 0.55)),
-          radius: 0.07,
+          width: 1.6,
+          depth: 1.6,
+          height: Math.min(4.6, Math.max(2.8, scaledHeight * 0.5)),
+          radius: 0.065,
         }
       : null,
   };
@@ -125,10 +125,10 @@ export function buildTrackBatches(machine: MachineLayout): TrackBatch[] {
     const rear = piece.kind === 'returnRail' || piece.kind === 'backLift';
     const lift = piece.kind === 'loopLift';
     if (rear || lift) {
-      add(piece.role === 'look' ? 'scout' : 'steel', piece.points, rear ? 0.065 : 0.1);
-      if (lift) add(roleFinish(piece), piece.points, 0.035, 0.13);
+      add(piece.role === 'look' ? 'scout' : lift ? roleFinish(piece) : 'steel', piece.points, rear ? 0.065 : 0.11);
+      if (lift) add('steel', piece.points, 0.03, 0.14);
     } else {
-      add('edge', piece.points, 0.215, -0.025);
+      add('edge', piece.points, 0.23, -0.05);
       add('birch', piece.points, 0.19, 0.03);
       add(piece.role === 'look' ? 'scout' : 'brass', piece.points, 0.032, 0.21);
       add(piece.kind === 'bypassChute' ? roleFinish(piece) : 'edge', piece.points, 0.032, -0.21);

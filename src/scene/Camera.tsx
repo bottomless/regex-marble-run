@@ -13,18 +13,18 @@ export interface CameraProps {
   insetRight?: number;
 }
 
-export function cameraPose(metrics: DisplayMetrics, aspect: number, fov = 42) {
-  const target = new Vector3(0, (metrics.height + 0.9) / 2, 0);
-  const direction = new Vector3(0.28, 0.32, 1).normalize();
+export function cameraPose(metrics: DisplayMetrics, aspect: number, fov = 36) {
+  const target = new Vector3(0, (metrics.height + 1.6) / 2, 0);
+  const direction = new Vector3(0.08, 0.17, 1).normalize();
   const right = new Vector3().crossVectors(new Vector3(0, 1, 0), direction).normalize();
   const up = new Vector3().crossVectors(direction, right);
-  const verticalSlope = Math.tan(MathUtils.degToRad(fov) / 2) / 1.12;
+  const verticalSlope = Math.tan(MathUtils.degToRad(fov) / 2) / 1.02;
   const horizontalSlope = verticalSlope * Math.max(0.01, aspect);
   let distance = 1;
 
   const bounds = [
-    { width: metrics.width, depth: metrics.depth, bottom: 0.6, top: metrics.height + 0.6 },
-    { width: metrics.boardWidth, depth: metrics.boardDepth, bottom: 0.15, top: 0.3 },
+    { width: metrics.width, depth: metrics.depth, bottom: 0.6, top: metrics.height + 1.6 },
+    { width: metrics.boardWidth, depth: metrics.boardDepth, bottom: 0.1, top: 0.3 },
   ];
   for (const { width, depth, bottom, top } of bounds) {
     for (const x of [-width / 2, width / 2]) {
@@ -65,13 +65,18 @@ export function Camera({ metrics, resetKey, reducedMotion, insetRight = 0 }: Cam
     const controls = controlsRef.current;
     if (!controls || !(camera instanceof PerspectiveCamera) || width < 1 || height < 1) return;
 
-    const islandWidth = width < 640 ? 0 : 344;
-    const rightInset = width < 640 ? 0 : insetRight;
-    const pose = cameraPose(metrics, (width - islandWidth - rightInset) / height, camera.getEffectiveFOV());
+    const compact = width < 640;
+    const topInset = compact ? 0 : 128;
+    const bottomInset = compact ? 0 : 72;
+    const rightInset = compact ? 0 : insetRight;
+    const usableHeight = Math.max(1, height - topInset - bottomInset);
+    const fullFov = camera.getEffectiveFOV();
+    const fitFov = MathUtils.radToDeg(2 * Math.atan(Math.tan(MathUtils.degToRad(fullFov) / 2) * (usableHeight / height)));
+    const pose = cameraPose(metrics, (width - rightInset) / usableHeight, fitFov);
     updateImmediately(controls, () => {
       camera.aspect = width / height;
-      if (islandWidth || rightInset) {
-        camera.setViewOffset(width, height, (rightInset - islandWidth) / 2, 0, width, height);
+      if (topInset || bottomInset || rightInset) {
+        camera.setViewOffset(width, height, rightInset / 2, (bottomInset - topInset) / 2, width, height);
       } else {
         camera.clearViewOffset();
       }
