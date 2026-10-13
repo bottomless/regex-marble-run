@@ -18,7 +18,7 @@ export function cameraPose(metrics: DisplayMetrics, aspect: number, fov = 36) {
   const direction = new Vector3(0.08, 0.17, 1).normalize();
   const right = new Vector3().crossVectors(new Vector3(0, 1, 0), direction).normalize();
   const up = new Vector3().crossVectors(direction, right);
-  const verticalSlope = Math.tan(MathUtils.degToRad(fov) / 2) / 1.02;
+  const verticalSlope = Math.tan(MathUtils.degToRad(fov) / 2);
   const horizontalSlope = verticalSlope * Math.max(0.01, aspect);
   let distance = 1;
 
@@ -66,8 +66,8 @@ export function Camera({ metrics, resetKey, reducedMotion, insetRight = 0 }: Cam
     if (!controls || !(camera instanceof PerspectiveCamera) || width < 1 || height < 1) return;
 
     const compact = width < 640;
-    const topInset = compact ? 0 : 128;
-    const bottomInset = compact ? 0 : 72;
+    const topInset = compact ? 0 : 84;
+    const bottomInset = compact ? 0 : 60;
     const rightInset = compact ? 0 : insetRight;
     const usableHeight = Math.max(1, height - topInset - bottomInset);
     const fullFov = camera.getEffectiveFOV();

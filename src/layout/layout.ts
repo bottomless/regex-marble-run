@@ -6,7 +6,7 @@ export const SWITCHBACK_THRESHOLD = 6;
 export const MODULE_COLLAPSE_LEAVES = 80;
 export const HARD_LEAF_CAP = 320;
 
-const RADIUS = 0.25;
+const RADIUS = 0.36;
 const GAP = 0.8;
 const DROP = 2;
 const BRANCH_GAP = 2.4;

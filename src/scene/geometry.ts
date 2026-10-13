@@ -1,5 +1,4 @@
-import { CatmullRomCurve3, TubeGeometry, Vector3 } from 'three';
-import type { BufferGeometry } from 'three';
+import { BufferGeometry, CatmullRomCurve3, Float32BufferAttribute, TubeGeometry, Vector3 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { MachineLayout, Piece, Vec3 } from '../layout/pieces.ts';
 
@@ -68,7 +67,7 @@ export function displayMetrics(machine: MachineLayout, options: { flood?: boolea
   const height = Math.max(1, max.y - min.y);
   const depth = Math.max(1, max.z - min.z);
   const scale = 11 / Math.max(height, width * 0.85, depth);
-  const scaledHeight = height * scale;
+  const scaledHeight = Math.min(11, height * scale);
   const baseBoardWidth = Math.max(6.5, width * scale + 2);
   const boardWidth = options.flood ? baseBoardWidth + TANK_SPAN : baseBoardWidth;
   return {
@@ -108,17 +107,123 @@ export function trackCurve(points: Vec3[]): CatmullRomCurve3 {
   );
 }
 
+/** Half-open channel profile the marble rolls in: a flat bed with two low lips, in curve-local units. */
+export const CHANNEL = {
+  halfWidth: 0.34,
+  lipWidth: 0.06,
+  lipHeight: 0.16,
+  bedDepth: 0.1,
+} as const;
+
+interface SweepFrame {
+  p: Vector3;
+  right: Vector3;
+  up: Vector3;
+}
+
+/**
+ * Gravity-aligned frames along a curve: `up` always leans toward world +Y so an open channel keeps
+ * its mouth facing up, unlike Frenet frames (which twist with the curve). Vertical stretches reuse
+ * the previous `right` so the profile never snaps.
+ */
+export function sweepFrames(curve: CatmullRomCurve3, segments: number): SweepFrame[] {
+  const frames: SweepFrame[] = [];
+  const worldUp = new Vector3(0, 1, 0);
+  let previous = new Vector3(1, 0, 0);
+  for (let i = 0; i <= segments; i++) {
+    const u = i / segments;
+    const p = curve.getPointAt(u);
+    const t = curve.getTangentAt(u).normalize();
+    let right = new Vector3().crossVectors(t, worldUp);
+    if (right.lengthSq() < 1e-4) {
+      right = previous.clone().addScaledVector(t, -previous.dot(t));
+      if (right.lengthSq() < 1e-8) right.set(1, 0, 0);
+    }
+    right.normalize();
+    const up = new Vector3().crossVectors(right, t).normalize();
+    frames.push({ p, right, up });
+    previous = right;
+  }
+  return frames;
+}
+
+/** Sweeps an axis-aligned rectangle (in the frame's right/up plane) along the frames, capped at both ends. */
+export function sweepRect(frames: SweepFrame[], x0: number, x1: number, y0: number, y1: number): BufferGeometry {
+  const corners: [number, number][] = [
+    [x0, y0],
+    [x1, y0],
+    [x1, y1],
+    [x0, y1],
+  ];
+  const positions: number[] = [];
+  const at = (frame: SweepFrame, [x, y]: [number, number]) => {
+    positions.push(
+      frame.p.x + frame.right.x * x + frame.up.x * y,
+      frame.p.y + frame.right.y * x + frame.up.y * y,
+      frame.p.z + frame.right.z * x + frame.up.z * y,
+    );
+  };
+  for (let i = 0; i < frames.length - 1; i++) {
+    const f0 = frames[i];
+    const f1 = frames[i + 1];
+    for (let k = 0; k < 4; k++) {
+      const a = corners[k];
+      const b = corners[(k + 1) % 4];
+      at(f0, a);
+      at(f1, b);
+      at(f0, b);
+      at(f0, a);
+      at(f1, a);
+      at(f1, b);
+    }
+  }
+  const first = frames[0];
+  const last = frames[frames.length - 1];
+  at(first, corners[0]);
+  at(first, corners[1]);
+  at(first, corners[2]);
+  at(first, corners[0]);
+  at(first, corners[2]);
+  at(first, corners[3]);
+  at(last, corners[0]);
+  at(last, corners[2]);
+  at(last, corners[1]);
+  at(last, corners[0]);
+  at(last, corners[3]);
+  at(last, corners[2]);
+  const geometry = new BufferGeometry();
+  geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('uv', new Float32BufferAttribute(new Array((positions.length / 3) * 2).fill(0), 2));
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
 export function buildTrackBatches(machine: MachineLayout): TrackBatch[] {
   const buckets = new Map<TrackFinish, BufferGeometry[]>();
+  function put(finish: TrackFinish, geometry: BufferGeometry) {
+    const bucket = buckets.get(finish) ?? [];
+    bucket.push(geometry);
+    buckets.set(finish, bucket);
+  }
+  function segmentsFor(curve: CatmullRomCurve3): number {
+    return Math.min(72, Math.max(8, Math.ceil(curve.getLength() * 5)));
+  }
   function add(finish: TrackFinish, points: Vec3[], radius: number, zOffset = 0, yOffset = 0) {
     if (points.length < 2) return;
     const shifted = points.map((p) => ({ x: p.x, y: p.y + yOffset, z: p.z + zOffset }));
     const curve = trackCurve(shifted);
-    const segments = Math.min(72, Math.max(8, Math.ceil(curve.getLength() * 5)));
-    const geometry = new TubeGeometry(curve, segments, radius, 8, false);
-    const bucket = buckets.get(finish) ?? [];
-    bucket.push(geometry);
-    buckets.set(finish, bucket);
+    const tube = new TubeGeometry(curve, segmentsFor(curve), radius, 8, false);
+    put(finish, tube.toNonIndexed());
+    tube.dispose();
+  }
+  function channel(points: Vec3[], lipFinish: TrackFinish) {
+    if (points.length < 2) return;
+    const curve = trackCurve(points);
+    const frames = sweepFrames(curve, segmentsFor(curve));
+    const { halfWidth, lipWidth, lipHeight, bedDepth } = CHANNEL;
+    put('birch', sweepRect(frames, -halfWidth, halfWidth, -bedDepth, 0));
+    put(lipFinish, sweepRect(frames, -halfWidth, -halfWidth + lipWidth, 0, lipHeight));
+    put(lipFinish, sweepRect(frames, halfWidth - lipWidth, halfWidth, 0, lipHeight));
   }
   for (const piece of machine.pieces) {
     if (!piece.points) continue;
@@ -128,10 +233,10 @@ export function buildTrackBatches(machine: MachineLayout): TrackBatch[] {
       add(piece.role === 'look' ? 'scout' : lift ? roleFinish(piece) : 'steel', piece.points, rear ? 0.065 : 0.11);
       if (lift) add('steel', piece.points, 0.03, 0.14);
     } else {
-      add('edge', piece.points, 0.23, -0.05);
-      add('birch', piece.points, 0.19, 0.03);
-      add(piece.role === 'look' ? 'scout' : 'brass', piece.points, 0.032, 0.21);
-      add(piece.kind === 'bypassChute' ? roleFinish(piece) : 'edge', piece.points, 0.032, -0.21);
+      channel(
+        piece.points,
+        piece.role === 'look' ? 'scout' : piece.kind === 'bypassChute' ? roleFinish(piece) : 'edge',
+      );
     }
   }
   return [...buckets].map(([finish, parts]) => {

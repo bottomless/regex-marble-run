@@ -48,7 +48,7 @@ function LiveTileRail({
   const machineState = useStore(store, (s) => s.machine);
   const count = Math.min(24, Math.floor((metrics.boardWidth - 1) / 0.4));
   const tiles = visibleTiles(input, unicode, count);
-  const pitch = Math.min(0.49, (metrics.boardWidth - 1) / Math.max(1, tiles.length));
+  const pitch = Math.min(0.62, (metrics.boardWidth - 1) / Math.max(1, tiles.length));
   const front = metrics.boardDepth / 2 - 0.27;
   const ghosts = useMemo(() => new Set(scoutTiles(scoutWindow(machineState))), [machineState]);
   const brackets = useMemo(() => captureBrackets(program, machineState), [program, machineState]);
@@ -62,7 +62,7 @@ function LiveTileRail({
   return (
     <group>
       <mesh position={[0, 0.57, front - 0.1]} material={materials.tracks.edge} receiveShadow>
-        <boxGeometry args={[Math.max(1.2, tiles.length * pitch + 0.16), 0.06, 0.48]} />
+        <boxGeometry args={[Math.max(1.2, tiles.length * pitch + 0.16), 0.06, 0.54]} />
       </mesh>
       {tiles.map((tile, i) => {
         const status = tileStatus(machineState, tile.index);
@@ -72,10 +72,10 @@ function LiveTileRail({
         return (
           <group
             key={tile.index}
-            position={[(i - (tiles.length - 1) / 2) * pitch, 0.69, front]}
+            position={[(i - (tiles.length - 1) / 2) * pitch, 0.73, front]}
           >
             <RoundedBox
-              args={[pitch - 0.035, 0.24, 0.38]}
+              args={[pitch - 0.04, 0.32, 0.44]}
               radius={0.03}
               smoothness={2}
               material={gold ? materials.brass : lit ? materials.tracks.cobalt : materials.tracks.birch}
@@ -85,20 +85,28 @@ function LiveTileRail({
               text={
                 tile.glyph === ' ' ? '·' : tile.glyph === '\n' ? '↵' : tile.glyph === '\t' ? '⇥' : tile.glyph
               }
-              position={[0, 0.02, 0.2]}
-              size={0.2}
+              position={[0, 0.03, 0.23]}
+              size={0.27}
               width={pitch - 0.06}
               color={gold ? '#34372f' : lit ? '#f4efe2' : '#30362d'}
             />
-            <Glyph text={String(tile.index)} position={[0, -0.12, 0.205]} size={0.065} color="#82745e" />
+            <Glyph text={String(tile.index)} position={[0, -0.145, 0.235]} size={0.07} color="#82745e" />
             {isHead && (
-              <mesh position={[0, -0.19, 0]} material={materials.brass} castShadow>
-                <boxGeometry args={[pitch - 0.06, 0.05, 0.06]} />
-              </mesh>
+              <group position={[0, 0.2, 0.08]}>
+                <mesh position={[0, 0.26, 0]} material={materials.brass} castShadow>
+                  <cylinderGeometry args={[0.025, 0.025, 0.52, 8]} />
+                </mesh>
+                <mesh position={[0.14, 0.42, 0]} material={materials.tracks.vermilion} castShadow>
+                  <boxGeometry args={[0.28, 0.16, 0.03]} />
+                </mesh>
+                <mesh position={[0, 0.06, 0]} rotation={[0, 0, Math.PI]} material={materials.tracks.vermilion}>
+                  <coneGeometry args={[0.1, 0.14, 4]} />
+                </mesh>
+              </group>
             )}
             {ghosts.has(tile.index) && (
-              <mesh position={[0, 0.17, 0]} material={materials.tracks.scout}>
-                <boxGeometry args={[pitch - 0.05, 0.07, 0.42]} />
+              <mesh position={[0, 0.21, 0]} material={materials.tracks.scout}>
+                <boxGeometry args={[pitch - 0.05, 0.07, 0.48]} />
               </mesh>
             )}
           </group>
@@ -111,7 +119,7 @@ function LiveTileRail({
         const center = (start + end) / 2;
         const length = end - start;
         return (
-          <group key={bracket.group} position={[center, 1.02, front]}>
+          <group key={bracket.group} position={[center, 1.1, front]}>
             <mesh material={materials.brass}>
               <boxGeometry args={[length, 0.035, 0.05]} />
             </mesh>
@@ -155,7 +163,7 @@ function TileRail({
 }) {
   const count = Math.min(24, Math.floor((metrics.boardWidth - 1) / 0.4));
   const tiles = visibleTiles(input, unicode, count);
-  const pitch = Math.min(0.49, (metrics.boardWidth - 1) / Math.max(1, tiles.length));
+  const pitch = Math.min(0.62, (metrics.boardWidth - 1) / Math.max(1, tiles.length));
   const front = metrics.boardDepth / 2 - 0.27;
   if (store) {
     return (
@@ -172,12 +180,12 @@ function TileRail({
   return (
     <group>
       <mesh position={[0, 0.57, front - 0.1]} material={materials.tracks.edge} receiveShadow>
-        <boxGeometry args={[Math.max(1.2, tiles.length * pitch + 0.16), 0.06, 0.48]} />
+        <boxGeometry args={[Math.max(1.2, tiles.length * pitch + 0.16), 0.06, 0.54]} />
       </mesh>
       {tiles.map((tile, i) => (
-        <group key={tile.index} position={[(i - (tiles.length - 1) / 2) * pitch, 0.69, front]}>
+        <group key={tile.index} position={[(i - (tiles.length - 1) / 2) * pitch, 0.73, front]}>
           <RoundedBox
-            args={[pitch - 0.035, 0.24, 0.38]}
+            args={[pitch - 0.04, 0.32, 0.44]}
             radius={0.03}
             smoothness={2}
             material={materials.tracks.birch}
@@ -187,11 +195,11 @@ function TileRail({
             text={
               tile.glyph === ' ' ? '·' : tile.glyph === '\n' ? '↵' : tile.glyph === '\t' ? '⇥' : tile.glyph
             }
-            position={[0, 0.02, 0.2]}
-            size={0.2}
+            position={[0, 0.03, 0.23]}
+            size={0.27}
             width={pitch - 0.06}
           />
-          <Glyph text={String(tile.index)} position={[0, -0.12, 0.205]} size={0.065} color="#82745e" />
+          <Glyph text={String(tile.index)} position={[0, -0.145, 0.235]} size={0.07} color="#82745e" />
         </group>
       ))}
       {input.length > (tiles.at(-1)?.index ?? 0) + (tiles.at(-1)?.glyph.length ?? 0) && (
@@ -315,7 +323,12 @@ export default function Machine({
           />
           {store && (
             <>
-              <Marble store={store} machine={machine} materials={materials} />
+              <Marble
+                store={store}
+                machine={machine}
+                materials={materials}
+                emphasis={Math.min(1.3, Math.max(1, 0.75 / metrics.scale))}
+              />
               <Carriage store={store} machine={machine} materials={materials} />
               {!flood && <Flags store={store} machine={machine} materials={materials} />}
               <Alternations program={program} store={store} machine={machine} materials={materials} />

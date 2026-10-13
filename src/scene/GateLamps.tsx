@@ -7,7 +7,7 @@ import { gateMarkers, type GateMarker } from '../playback/gates.ts';
 import type { PlaybackStore } from '../playback/store.ts';
 
 const LAMP_OFFSET: Record<GateMarker['kind'], [number, number, number]> = {
-  gate: [0, 0.84, -0.34],
+  gate: [0, 1.46, 0.3],
   sensor: [0, -0.48, 0.22],
   scout: [0, -0.48, 0.22],
   mirror: [0, 0.62, 0.15],
@@ -44,7 +44,7 @@ export default function GateLamps({ machine, store }: { machine: MachineLayout; 
           <group key={`${marker.node}:${i}`} position={[p.x, p.y, p.z]}>
             {lamp && (
               <mesh position={LAMP_OFFSET[marker.kind]} material={lamp}>
-                <sphereGeometry args={[marker.kind === 'gate' ? 0.1 : 0.095, 12, 8]} />
+                <sphereGeometry args={[marker.kind === 'gate' ? 0.13 : 0.095, 12, 8]} />
               </mesh>
             )}
             {marker.kind === 'gate' && marker.status === 'pass' && (

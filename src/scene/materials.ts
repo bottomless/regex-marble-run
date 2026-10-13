@@ -46,9 +46,42 @@ function woodTexture(): CanvasTexture {
   return texture;
 }
 
+/** Classic glass marble: milky body with a cobalt ribbon and a thin vermilion thread twisted through it. */
+function marbleTexture(): CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#f1f4f3';
+  ctx.fillRect(0, 0, 256, 128);
+  const ribbon = (color: string, width: number, phase: number, amplitude: number, alpha: number) => {
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = alpha;
+    ctx.lineWidth = width;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (let x = -8; x <= 264; x += 4) {
+      const y = 64 + Math.sin((x / 256) * Math.PI * 2 + phase) * amplitude;
+      if (x === -8) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  };
+  ribbon(palette.cobalt, 18, 0, 34, 0.85);
+  ribbon('#ffffff', 5, 0.35, 34, 0.5);
+  ribbon(palette.vermilion, 6, Math.PI, 30, 0.8);
+  ctx.globalAlpha = 1;
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
+  texture.wrapS = RepeatWrapping;
+  texture.anisotropy = 4;
+  return texture;
+}
+
 export function useMaterials(dark: boolean) {
   const materials = useMemo(() => {
     const wood = woodTexture();
+    const swirl = marbleTexture();
     const tracks = Object.fromEntries(
       Object.entries(palette)
         .filter(([key]) => key !== 'captures')
@@ -73,7 +106,18 @@ export function useMaterials(dark: boolean) {
       brass: tracks.brass,
       steel: tracks.steel,
       ink: new MeshStandardMaterial({ color: '#34372f', roughness: 0.65 }),
-      marble: new MeshPhysicalMaterial({ color: '#e1e8e8', metalness: 0.98, roughness: 0.12, clearcoat: 1 }),
+      swirl,
+      marble: new MeshPhysicalMaterial({
+        color: '#ffffff',
+        map: swirl,
+        metalness: 0.1,
+        roughness: 0.12,
+        clearcoat: 1,
+        clearcoatRoughness: 0.08,
+        envMapIntensity: 1.4,
+        emissive: '#2a3034',
+        emissiveIntensity: 0.12,
+      }),
       mirror: new MeshStandardMaterial({ color: '#e2efee', metalness: 1, roughness: 0.08 }),
     };
   }, [dark]);
@@ -87,6 +131,7 @@ export function useMaterials(dark: boolean) {
       materials.marble.dispose();
       materials.mirror.dispose();
       materials.wood.dispose();
+      materials.swirl.dispose();
     },
     [materials],
   );

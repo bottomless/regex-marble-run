@@ -265,12 +265,22 @@ export default function Gates({
                     <boxGeometry args={[tileWidth + 0.08, 1.58, 0.02]} />
                   </mesh>
                   <mesh
-                    position={[0, 0.4, 0.3]}
+                    position={[0, 0.98, 0.3]}
                     material={pieceLit ? litMaterial : materials.tile}
                     castShadow
                   >
                     <boxGeometry args={[tileWidth, 0.8, 0.12]} />
                   </mesh>
+                  {[-1, 1].map((side) => (
+                    <mesh
+                      key={side}
+                      position={[side * (tileWidth / 2 - 0.09), 0.1, 0.3]}
+                      material={pieceLit ? litMaterial : materials.tile}
+                      castShadow
+                    >
+                      <boxGeometry args={[0.18, 0.96, 0.12]} />
+                    </mesh>
+                  ))}
                 </>
               ) : !sensor ? (
                 <>
@@ -295,7 +305,7 @@ export default function Gates({
                       : '?<='
                     : (piece.label ?? '')
                 }
-                position={[0, piece.kind === 'gate' ? 0.4 : 0, piece.kind === 'gate' ? 0.37 : 0.28]}
+                position={[0, piece.kind === 'gate' ? 0.98 : 0, piece.kind === 'gate' ? 0.37 : 0.28]}
                 color={piece.kind === 'opaque' ? '#efe6d7' : '#2a2520'}
                 size={glyphSize}
                 width={piece.kind === 'gate' ? tileWidth - 0.2 : 2}
