@@ -9,6 +9,8 @@ export interface CameraProps {
   metrics: DisplayMetrics;
   resetKey: number;
   reducedMotion: boolean;
+  /** Pixels reserved on the right for overlays (the split HUD), so the framing leaves them clear. */
+  insetRight?: number;
 }
 
 export function cameraPose(metrics: DisplayMetrics, aspect: number, fov = 42) {
@@ -52,7 +54,7 @@ function updateImmediately(controls: OrbitControlsImpl, change: () => void) {
   controls.enableDamping = damping;
 }
 
-export function Camera({ metrics, resetKey, reducedMotion }: CameraProps) {
+export function Camera({ metrics, resetKey, reducedMotion, insetRight = 0 }: CameraProps) {
   const camera = useThree((state) => state.camera);
   const canvas = useThree((state) => state.gl.domElement);
   const { width, height } = useThree((state) => state.size);
@@ -64,11 +66,12 @@ export function Camera({ metrics, resetKey, reducedMotion }: CameraProps) {
     if (!controls || !(camera instanceof PerspectiveCamera) || width < 1 || height < 1) return;
 
     const islandWidth = width < 640 ? 0 : 344;
-    const pose = cameraPose(metrics, (width - islandWidth) / height, camera.getEffectiveFOV());
+    const rightInset = width < 640 ? 0 : insetRight;
+    const pose = cameraPose(metrics, (width - islandWidth - rightInset) / height, camera.getEffectiveFOV());
     updateImmediately(controls, () => {
       camera.aspect = width / height;
-      if (islandWidth) {
-        camera.setViewOffset(width, height, -islandWidth / 2, 0, width, height);
+      if (islandWidth || rightInset) {
+        camera.setViewOffset(width, height, (rightInset - islandWidth) / 2, 0, width, height);
       } else {
         camera.clearViewOffset();
       }
@@ -83,7 +86,7 @@ export function Camera({ metrics, resetKey, reducedMotion }: CameraProps) {
     });
     controls.saveState();
     invalidate();
-  }, [camera, height, invalidate, metrics, width]);
+  }, [camera, height, insetRight, invalidate, metrics, width]);
 
   useLayoutEffect(() => {
     frame();

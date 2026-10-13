@@ -26,6 +26,9 @@ import GateLamps from './GateLamps.tsx';
 import Scout from './Scout.tsx';
 import Mirrors from './Mirrors.tsx';
 import Celebration from './Celebration.tsx';
+import Flood from './Flood.tsx';
+import type { FloodModel } from '../playback/flood.ts';
+import type { FlagEntry } from '../playback/state.ts';
 
 function LiveTileRail({
   input,
@@ -198,7 +201,7 @@ function TileRail({
   );
 }
 
-function Base({ metrics, materials }: { metrics: DisplayMetrics; materials: Materials }) {
+export function Base({ metrics, materials, label = copy.scene.base }: { metrics: DisplayMetrics; materials: Materials; label?: string }) {
   const { boardWidth: w, boardDepth: d, height: h } = metrics;
   return (
     <group>
@@ -242,9 +245,9 @@ function Base({ metrics, materials }: { metrics: DisplayMetrics; materials: Mate
         <boxGeometry args={[w - 0.9, 0.16, 0.24]} />
       </mesh>
       <mesh position={[0, 0.28, d / 2 + 0.018]} material={materials.brass}>
-        <boxGeometry args={[Math.min(3.2, w * 0.5), 0.24, 0.03]} />
+        <boxGeometry args={[Math.min(4.6, w * 0.7), 0.24, 0.03]} />
       </mesh>
-      <Glyph text={copy.scene.base} position={[0, 0.29, d / 2 + 0.045]} size={0.115} width={3} />
+      <Glyph text={label} position={[0, 0.29, d / 2 + 0.045]} size={0.115} width={Math.min(4.4, w * 0.68)} />
     </group>
   );
 }
@@ -257,6 +260,9 @@ export default function Machine({
   reducedMotion,
   onExpand,
   store,
+  metrics: given,
+  flood = null,
+  label,
 }: {
   machine: MachineLayout;
   program: Program;
@@ -265,8 +271,11 @@ export default function Machine({
   reducedMotion: boolean;
   onExpand: (id: number) => void;
   store?: PlaybackStore;
+  metrics?: DisplayMetrics;
+  flood?: { model: FloodModel; recorded: FlagEntry[] } | null;
+  label?: string;
 }) {
-  const metrics = displayMetrics(machine);
+  const metrics = given ?? displayMetrics(machine, { flood: flood !== null });
   const building = useRef<Group>(null);
   const elapsed = useRef(0);
   useFrame((state, delta) => {
@@ -278,7 +287,7 @@ export default function Machine({
   });
   return (
     <group>
-      <Base metrics={metrics} materials={materials} />
+      <Base metrics={metrics} materials={materials} label={label} />
       <group ref={building} position={[0, 0.6, 0]} scale={metrics.scale}>
         <group position={metrics.offset}>
           <Tracks machine={machine} materials={materials} />
@@ -294,7 +303,7 @@ export default function Machine({
             <>
               <Marble store={store} machine={machine} materials={materials} />
               <Carriage store={store} machine={machine} materials={materials} />
-              <Flags store={store} machine={machine} materials={materials} />
+              {!flood && <Flags store={store} machine={machine} materials={materials} />}
               <Alternations program={program} store={store} machine={machine} materials={materials} />
               <Repeats program={program} store={store} machine={machine} materials={materials} />
               <GateLamps store={store} machine={machine} />
@@ -305,6 +314,17 @@ export default function Machine({
           )}
         </group>
       </group>
+      {store && flood && (
+        <Flood
+          store={store}
+          machine={machine}
+          model={flood.model}
+          recorded={flood.recorded}
+          metrics={metrics}
+          materials={materials}
+          reducedMotion={reducedMotion}
+        />
+      )}
       <TileRail
         input={input}
         unicode={program.flags.unicode || program.flags.unicodeSets}

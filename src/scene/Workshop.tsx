@@ -1,20 +1,24 @@
 import { Component, Suspense, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
+import { useStore } from 'zustand';
 import { ContactShadows, Environment, Lightformer } from '@react-three/drei';
 import { ACESFilmicToneMapping } from 'three';
 import type { Program } from '../engine/ir.ts';
 import { layout } from '../layout/layout.ts';
 import DebugLayout from '../layout/DebugLayout.tsx';
 import { copy } from '../copy.ts';
-import { usePlaybackController } from '../playback/usePlayback.ts';
+import { usePlaybackController, type ViewMode } from '../playback/usePlayback.ts';
 import type { PlaybackStore } from '../playback/store.ts';
 import { tileStatus } from '../playback/tiles.ts';
 import { captureSpans } from '../playback/captures.ts';
 import Transport from '../playback/Transport.tsx';
-import { displayMetrics } from './geometry.ts';
+import Hud from '../playback/Hud.tsx';
+import { displayMetrics, splitPlacement } from './geometry.ts';
 import { useMaterials } from './materials.ts';
 import Machine from './Machine.tsx';
+import LinearSide from './LinearSide.tsx';
+import { useFloodModel } from './Flood.tsx';
 import Camera from './Camera.tsx';
 
 interface WorkshopProps {
@@ -23,6 +27,7 @@ interface WorkshopProps {
   dark: boolean;
   reducedMotion: boolean;
   resetKey: number;
+  mode?: ViewMode;
 }
 
 class SceneBoundary extends Component<{ children: ReactNode; fallback: ReactNode }, { failed: boolean }> {
@@ -54,7 +59,20 @@ function Scene({
   useEffect(() => {
     canvas.setAttribute('data-pattern', program.source);
     canvas.setAttribute('data-pieces', String(machine.pieces.length));
+    if (!canvas.hasAttribute('data-flood')) canvas.setAttribute('data-flood', 'false');
     const mirror = (s: ReturnType<PlaybackStore['getState']>) => {
+      canvas.setAttribute('data-linear', s.linear.status);
+      if (s.linear.status === 'ready') {
+        const run = s.linear.run;
+        canvas.setAttribute('data-linear-ticks', String(run.ticks.length));
+        canvas.setAttribute('data-linear-steps', String(run.steps));
+        canvas.setAttribute('data-linear-max-threads', String(run.maxThreads));
+        canvas.setAttribute('data-linear-end', String(run.end));
+      } else {
+        for (const name of ['data-linear-ticks', 'data-linear-steps', 'data-linear-max-threads', 'data-linear-end']) {
+          canvas.removeAttribute(name);
+        }
+      }
       canvas.setAttribute('data-event-index', String(s.eventIndex));
       canvas.setAttribute('data-event-count', String(s.eventCount));
       if (s.machine) {
@@ -76,7 +94,14 @@ function Scene({
     mirror(store.getState());
     return store.subscribe(mirror);
   }, [canvas, machine, program, store, input]);
-  const metrics = useMemo(() => displayMetrics(machine), [machine]);
+  const flood = useFloodModel(store);
+  const linear = useStore(store, (s) => s.linear);
+  const linearRun = linear.status === 'ready' ? linear.run : null;
+  const metrics = useMemo(() => displayMetrics(machine, { flood: flood.model !== null }), [machine, flood.model]);
+  const rightMetrics = useMemo(() => displayMetrics(machine), [machine]);
+  const placement = useMemo(() => (linearRun ? splitPlacement(metrics, rightMetrics) : null), [linearRun, metrics, rightMetrics]);
+  const framing = placement?.framing ?? metrics;
+  const leftLabel = placement ? `${copy.split.left.toUpperCase()} · ${copy.split.leftEngines}` : undefined;
   const studio = dark ? '#22231f' : '#f3f0e8';
   return (
     <>
@@ -119,32 +144,53 @@ function Scene({
           color="#ffffff"
         />
       </Environment>
-      <Machine
-        key={`${program.source}/${machine.pieces.length}`}
-        machine={machine}
-        program={program}
-        input={input}
-        materials={materials}
-        reducedMotion={reducedMotion}
-        onExpand={onExpand}
-        store={store}
-      />
+      <group position={[placement?.leftX ?? 0, 0, 0]}>
+        <Machine
+          key={`${program.source}/${machine.pieces.length}`}
+          machine={machine}
+          program={program}
+          input={input}
+          materials={materials}
+          reducedMotion={reducedMotion}
+          onExpand={onExpand}
+          store={store}
+          metrics={metrics}
+          flood={flood.model ? { model: flood.model, recorded: flood.recorded } : null}
+          label={leftLabel}
+        />
+      </group>
+      {placement && linearRun && (
+        <group position={[placement.rightX, 0, 0]}>
+          <LinearSide
+            key={`${program.source}/${machine.pieces.length}/linear`}
+            machine={machine}
+            program={program}
+            input={input}
+            materials={materials}
+            metrics={rightMetrics}
+            store={store}
+            run={linearRun}
+            reducedMotion={reducedMotion}
+            onExpand={onExpand}
+          />
+        </group>
+      )}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.04, 0]} receiveShadow>
         <planeGeometry args={[200, 200]} />
         <meshBasicMaterial color={studio} toneMapped={false} />
       </mesh>
       <ContactShadows
-        key={`${program.source}/${dark}/${machine.pieces.length}`}
+        key={`${program.source}/${dark}/${machine.pieces.length}/${placement ? 'split' : 'single'}`}
         position={[0, 0, 0]}
         opacity={dark ? 0.5 : 0.36}
-        scale={35}
+        scale={placement ? 35 + framing.boardWidth : 35}
         blur={2.2}
         far={18}
         resolution={256}
         frames={1}
         color="#3e3121"
       />
-      <Camera metrics={metrics} reducedMotion={reducedMotion} resetKey={resetKey} />
+      <Camera metrics={framing} reducedMotion={reducedMotion} resetKey={resetKey} insetRight={placement ? 320 : 0} />
     </>
   );
 }
@@ -176,6 +222,7 @@ function BuildWorkshop(props: WorkshopProps) {
     program,
     layout: built.machine,
     reducedMotion: props.reducedMotion,
+    mode: props.mode,
   });
   const fallback = (
     <div className="scene-fallback">
@@ -222,6 +269,7 @@ function BuildWorkshop(props: WorkshopProps) {
               ))}
           </div>
         )}
+        <Hud store={playback.store} reducedMotion={props.reducedMotion} />
         <Transport store={playback.store} />
       </>
     </SceneBoundary>

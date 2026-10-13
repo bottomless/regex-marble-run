@@ -3,11 +3,16 @@ import {
   Suspense,
   useCallback,
   useDeferredValue,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
 } from 'react';
 import { copy } from './copy.ts';
+import { decodeShare, encodeShare, shareUrl, type ShareState } from './share.ts';
+import { linearEligibility } from './playback/linear.ts';
+import type { ViewMode } from './playback/usePlayback.ts';
 import type { Program } from './engine/ir.ts';
 import { parsePattern, PatternError, PATTERN_MAX, STRING_MAX } from './engine/parse.ts';
 import DebugLayout from './layout/DebugLayout.tsx';
@@ -16,6 +21,17 @@ import { DEFAULT_PRESET, PRESETS, type Preset } from './presets.ts';
 const Workshop = lazy(() => import('./scene/Workshop.tsx'));
 const FLAG_OPTIONS = ['i', 'm', 's', 'u', 'v', 'y'] as const;
 const DEFAULT_DEBUG_PATTERN = '^(a+)+$';
+const SHARE_DEBOUNCE_MS = 250;
+const DEFAULT_SHARE: ShareState = {
+  pattern: DEFAULT_PRESET.pattern,
+  flags: DEFAULT_PRESET.flags,
+  input: DEFAULT_PRESET.input,
+  mode: 'single',
+};
+
+function initialShare(): ShareState {
+  return decodeShare(window.location.hash, DEFAULT_SHARE) ?? DEFAULT_SHARE;
+}
 
 type Parsed =
   { program: Program; error: null } | { program: null; error: { message: string; index: number } };
@@ -51,10 +67,13 @@ function PieceIcon({ kind }: { kind: (typeof copy.legend)[number]['kind'] }) {
 }
 
 function WorkshopApp() {
-  const [draft, setDraft] = useState({ pattern: DEFAULT_PRESET.pattern, flags: DEFAULT_PRESET.flags });
-  const [input, setInput] = useState(DEFAULT_PRESET.input);
+  const [initial] = useState(initialShare);
+  const [draft, setDraft] = useState({ pattern: initial.pattern, flags: initial.flags });
+  const [input, setInput] = useState(initial.input);
   const [expanded, setExpanded] = useState(() => !window.matchMedia('(max-width: 640px)').matches);
   const [resetKey, setResetKey] = useState(0);
+  const [mode, setMode] = useState<ViewMode>(initial.mode);
+  const [copied, setCopied] = useState<'idle' | 'done' | 'failed'>('idle');
   const dark = useMediaQuery('(prefers-color-scheme: dark)');
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
   const deferredDraft = useDeferredValue(draft);
@@ -73,9 +92,55 @@ function WorkshopApp() {
     }
   }, [deferredDraft]);
   const error = pending ? null : parsed.error;
+  const eligibility = useMemo(() => (parsed.program ? linearEligibility(parsed.program) : null), [parsed.program]);
+  const splitAvailable = eligibility?.ok ?? false;
+  const effectiveMode: ViewMode = mode === 'split' && splitAvailable ? 'split' : 'single';
   const preset = PRESETS.find(
     (item) => item.pattern === draft.pattern && item.flags === draft.flags && item.input === input,
   );
+
+  const share = useMemo<ShareState>(
+    () => ({ pattern: draft.pattern, flags: draft.flags, input, mode }),
+    [draft.pattern, draft.flags, input, mode],
+  );
+  const shareRef = useRef(share);
+  useEffect(() => {
+    shareRef.current = share;
+    const hash = encodeShare(share);
+    if (window.location.hash === hash) return;
+    const timer = window.setTimeout(() => {
+      if (window.location.hash !== hash) window.history.replaceState(null, '', hash);
+    }, SHARE_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [share]);
+  useEffect(() => {
+    function onHashChange() {
+      const next = decodeShare(window.location.hash, shareRef.current);
+      if (!next || encodeShare(next) === encodeShare(shareRef.current)) return;
+      setDraft({ pattern: next.pattern, flags: next.flags });
+      setInput(next.input);
+      setMode(next.mode);
+      setResetKey((key) => key + 1);
+    }
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+  useEffect(() => {
+    if (copied === 'idle') return;
+    const timer = window.setTimeout(() => setCopied('idle'), 2000);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
+
+  async function copyLink() {
+    const url = shareUrl(share, window.location);
+    if (window.location.hash !== encodeShare(share)) window.history.replaceState(null, '', encodeShare(share));
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied('done');
+    } catch {
+      setCopied('failed');
+    }
+  }
 
   function selectPreset(next: Preset) {
     setDraft({ pattern: next.pattern, flags: next.flags });
@@ -114,6 +179,7 @@ function WorkshopApp() {
               dark={dark}
               reducedMotion={reducedMotion}
               resetKey={resetKey}
+              mode={effectiveMode}
             />
           </Suspense>
         ) : (
@@ -165,6 +231,26 @@ function WorkshopApp() {
         </header>
 
         <div id="control-fields" className="control-fields">
+          <fieldset className="mode-toggle" aria-describedby={splitAvailable ? undefined : 'mode-note'} data-mode={effectiveMode}>
+            <legend className="sr-only">{copy.split.label}</legend>
+            {(['single', 'split'] as const).map((option) => (
+              <button
+                type="button"
+                key={option}
+                className="mode-option"
+                aria-pressed={effectiveMode === option}
+                disabled={option === 'split' && !splitAvailable}
+                onClick={() => setMode(option)}
+              >
+                {option === 'single' ? copy.split.single : copy.split.sideBySide}
+              </button>
+            ))}
+          </fieldset>
+          {eligibility && !eligibility.ok && (
+            <p id="mode-note" className="mode-note" role="status">
+              {copy.split.unavailable(eligibility.message)}
+            </p>
+          )}
           <div className="preset-picker">
             <label htmlFor="preset">{copy.presetsLabel}</label>
             <select
@@ -298,14 +384,21 @@ function WorkshopApp() {
               </a>
             )}
           </div>
+
+          <div className="share-row">
+            <button type="button" className="copy-link" onClick={() => void copyLink()} data-copied={copied}>
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path d="M8.5 11.5a3 3 0 0 0 4.2 0l3-3a3 3 0 0 0-4.2-4.2l-1 1" />
+                <path d="M11.5 8.5a3 3 0 0 0-4.2 0l-3 3a3 3 0 0 0 4.2 4.2l1-1" />
+              </svg>
+              {copy.share.copyLink}
+            </button>
+            <span className="share-status" role="status" aria-live="polite">
+              {copied === 'done' ? copy.share.copied : copied === 'failed' ? copy.share.failed : ''}
+            </span>
+          </div>
         </div>
       </section>
-
-      <aside className="stage-status" aria-label={copy.stageStatus}>
-        <span className="status-pin" aria-hidden="true" />
-        <span>{copy.stageStatus}</span>
-        {reducedMotion && <span className="motion-status">{copy.reducedMotion}</span>}
-      </aside>
 
       <footer className="workshop-footer">
         <ul className="piece-legend" aria-label={copy.legendLabel}>

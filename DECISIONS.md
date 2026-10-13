@@ -454,3 +454,199 @@ skeleton-only routing; the original milestone context is retained.
   stepping parity for presets 1–5 and snapshot isolation. The Playwright case drives `(?<dup>a)\k<dup>`
   on `aa` through capture close, match, step back and restart on desktop and mobile. Totals: 1,067 unit
   tests, 34 browser tests; typecheck, lint and production build pass.
+
+### Full transport speed ladder (`src/playback/Transport.tsx`, `src/playback/store.ts`)
+
+- **One shared ladder.** Transport uses the timeline's `SPEED_STEPS` plus `INSTANT`: 0.25×, 0.5×,
+  1×, 2×, 4×, 16×, 64× and Instant. Labels stay in `copy.ts`; each button exposes its pressed state
+  and an accessible speed label. Tablet and mobile controls use two rows so every speed stays visible
+  at 320px and 390px; the mobile status line sits above the transport rather than across the pills.
+- **Finite changes preserve the pose.** The store retains the segment index and fractional progress even
+  when travel durations collapse to zero at 16× or 64×. Returning to a slower speed restores the same
+  pose and reducer state instead of rounding the fraction to an endpoint.
+- **Instant settles immediately.** Selecting Instant, loading a new trace with Instant selected, or
+  pressing Play in Instant settles on the final event without animation and leaves playback paused.
+  Returning to a finite speed keeps the result; Restart returns to the first event at the selected speed.
+  Event scrubbing and forward/backward stepping remain available in Instant.
+- **Boundaries follow the playhead, not elapsed time.** Start/end flags use segment index and fraction,
+  because every instant event has time zero. The end is no longer also marked as the start, so backward
+  stepping and Restart stay enabled. Layout rebuilds preserve a settled endpoint rather than returning
+  to the beginning of its final event.
+- **Verified.** 45 additional store tests cover finite speed pose preservation, instant completion while
+  playing, zero-duration navigation, reloads and endpoint-preserving layout rebuilds. Browser tests cover
+  all finite pills without moving the paused playhead, presets 1–5 (both greedy/lazy variants) finishing
+  with exact captures in Instant, restart/replay/backward steps, and unobstructed controls at 320px/390px.
+  All 1,112 unit tests and 38 desktop/mobile browser tests pass; lint, typecheck and production build pass.
+
+### M6: catastrophic-run flood presentation (`src/playback/flood.ts`, `src/scene/Flood.tsx`)
+
+- **Trigger.** `shouldFlood` turns the flood presentation on when the trace is truncated, the engine
+  gave up, or the run exceeds `FLOOD_STEP_THRESHOLD` (3,000 steps). Presets 6–8 flood; presets 1–5 and
+  the greedy/lazy variants do not. Preset 9 (`.*(?:.*=.*)` on `x=x`) finishes in 28 steps and matches,
+  so it stays in normal playback; its calibration against the postmortem is a separate preset decision
+  (see TODO).
+- **Sampling.** The flood model samples depth, read position and backtracks every `CHECKPOINT_EVERY`
+  (1,000) steps from the recorded events, then continues with the engine's count-only checkpoints,
+  which carry steps, depth and position. Backtracks are not counted per checkpoint, so the count-only
+  phase interpolates them linearly from the last recorded total to the engine's final total; the last
+  sample always lands on the exact final `steps` and `backtracks`.
+- **Tank.** One marble stands for the smallest power of ten (1, 10, 100, …) that keeps the pile within
+  10,000 instances; the lid label states "1 marble = N backtracks". The fill height is log-scaled from
+  10¹ (floor) to 10⁸ (brim) with brass graduations at 10²…10⁸; the pile is a deterministic staggered
+  heightfield, so density reads as count and height as the graduation. Counters show the sampled
+  backtracks and steps (with "gave up" when the engine stopped on its budget).
+- **Columns.** Flag columns replace the per-event flag stacks while flooding. The sampled depth is split
+  across the diverters that held flags when recording stopped, in proportion to their recorded share
+  (equal shares across all flag slots when nothing was recorded). Columns show the high-water mark
+  ("peak ×N") rather than the instantaneous depth, because catastrophic runs end on an empty stack,
+  and draw at most 24 pennants per column with the label carrying the full count.
+- **Settle clock.** The presentation plays the run forward once over three seconds in 20 buckets
+  (instanced marble count updates per frame; columns and counters per bucket) and then stays settled.
+  Reduced motion shows the settled state immediately. The transport still scrubs the recorded prefix.
+- **Layout.** The board widens by `TANK_SPAN` on the right while flooding and the tank sits in the added
+  span, so the fixed camera framing pulls back automatically. Scene data attributes expose
+  `data-flood`, per-marble ratio, marble count, backtracks, steps, depth, peak depth, level and columns.
+- **Verified.** 8 unit tests cover trigger thresholds, power-of-ten sampling, log graduations, sample
+  monotonicity through both phases, frame interpolation, column distribution and tank packing. Browser
+  tests check presets 6–8 settle to the expected marble count, totals, peak depth and column JSON on
+  desktop and mobile, that presets 1–5 and 9 stay in normal playback, and that leaving a flooded preset
+  clears the flood state. Totals: 1,120 unit tests; 42 browser tests pass (one playback test timed out
+  once under host load and passed on rerun); lint, typecheck and production build pass.
+
+### M6: native-time HUD and Cloudflare calibration (`src/playback/Hud.tsx`, `src/playback/counters.ts`)
+
+- **HUD.** A top-right readout shows Steps · Backtracks · Attempts · Flags · Native time · Result, as
+  PLAN §5 lists. Steps and backtracks come from prefix counts over the recorded trace (one step per
+  gate test or backtrack, the engine's own definition), so they follow the playhead exactly, including
+  backward stepping and scrubbing. Attempts and flag depth come from the reconstructed machine state.
+  Flooded runs show the engine totals directly, because their trace is truncated. The result is shown
+  only once the playhead reaches the end (or immediately for floods) so the ride is not spoiled; it
+  reads "Match @a..b", "No match" or "Gave up". On phones the HUD collapses to Steps + Result and sits
+  directly above the transport. The stale "Static build · playback arrives in M5" status is gone.
+- **Native timing.** The playback controller runs the M2 native worker alongside the engine for every
+  pattern/input change and publishes the reading through the playback store (`setNative`), where both
+  the HUD and the flood tank's "Native RegExp · …" line read it. The reading is independent of the
+  trace lifecycle: it stays "measuring…" until the probe reports, shows "over 3 s · stopped" on the
+  worker budget and "unavailable" if the browser rejects the pattern. Milliseconds are formatted to
+  two decimals under 1 ms, one under 10 ms, whole ms under 1 s, and seconds above.
+- **Preset 9 calibration.** `.*(?:.*=.*)` on `x=x` matches in 28 steps and never floods. The postmortem
+  itself notes that 20 x's with no `=` take 4,067 steps, so the preset now uses 1,200 x's with no
+  equals: the failure is cubic, the native engine takes about 1 s on this machine (0.85–1.1 s measured
+  in Chromium and Node), and our engine gives up on its 20M-step budget inside the 2.5 s wall. This
+  is within PLAN §7's 0.5–2 s target; the caption states both postmortem figures and that our step
+  counts use a different definition. 1,300 x's would be ~1.3 s and 2,000 ~4 s.
+- **Browser suite reduced to a 46 s smoke set.** The previous 22 tests × 2 viewports took 8–9 minutes
+  under SwiftShader: every piece test stepped through every trace event with a click and attribute
+  poll per event, the flood sweep ran four catastrophic presets through the 2.5 s engine budget twice
+  (browser and Node), and everything ran serially on both projects. The suite is now three desktop
+  tests (all presets build/play/flood with no errors or external requests; transport + HUD + instant;
+  evil-regex tank exactness + Cloudflare gave-up/native time) and one phone layout test. Piece-level
+  behaviour (tiles, flags, carriage, diverters, lamps, scout, brackets, mirrors, celebration) remains
+  covered by the 1,123 unit tests over the same pure modules the scene mirrors into data attributes.
+- **Verified.** 3 counter tests (prefix totals equal engine totals for presets 1–5, per-event
+  increments, store lifecycle for counters and native reading); flood tests updated so presets 6–9
+  flood and preset 9 gives up; preset tests assert the new input. Totals: 1,123 unit tests;
+  4 browser tests in 46 s; lint, typecheck and production build pass.
+
+## M7: Side-by-side mode
+
+### Steps 1–3: mode toggle, linear-time run, and the linear playback model (`src/playback/linear.ts`)
+
+- **Eligibility is decided from the IR, before any worker runs.** `linearEligibility` wraps M2's
+  `compilePike`, so the Side-by-side button is disabled (with the compile error as the explanation)
+  for backreferences, lookarounds, lookbehind and repetitions beyond the Thompson budget. Presets 4
+  and 5 are the ineligible presets. If the pattern becomes ineligible while split mode is selected,
+  the view falls back to single mode but remembers the choice, so returning to a regular pattern
+  re-enters split mode without another click.
+- **Second engine run, same budget.** In split mode the controller runs the Pike VM in its own worker
+  alongside the backtracker (2.5 s wall, 20M steps) and publishes `{off | running | ready | unavailable
+  | error}` through the playback store (`linear`). Cancelled runs are discarded silently; the stale
+  reading is replaced when the new one arrives.
+- **Model: one tick per visited input position.** `buildLinearRun` folds the per-thread trace into
+  ticks. Each tick lists the live threads after the epsilon closure (in priority order, each with its
+  IR node, start and the parent it split from), births, merges (thread → owner), deaths, whether a
+  fresh attempt started there, and whether an accepting thread stands there. The head is the tick's
+  position and only ever moves forward; `tickAtPosition` is the hook for synchronising both sides by
+  input position (PLAN §4.9). Surrogate pairs under `u` produce ticks at 0, 2, 3 — UTF-16 positions,
+  the same convention as the left side.
+- **Two step figures, used deliberately.** `tick.tests`/`cumulativeTests` count one character test per
+  live non-accepting thread: the honest per-tile work of a linear engine, derivable from the trace.
+  `run.steps` is the engine's instruction count (includes epsilon moves), the figure that will be
+  compared against the backtracking side's `steps` for the ratio, because both are instruction counts.
+  The engine trace is unchanged.
+- **Labels fact-checked** (PLAN §4.9): V8's non-backtracking engine still ships only behind
+  `--enable-experimental-regexp-engine` flags (v8.dev, 2021 post is current); .NET 7+ has an opt-in
+  `RegexOptions.NonBacktracking`; Ruby 3.2+ memoizes. The copy therefore says "Backtracking —
+  JavaScript, Python, Java, PCRE" and "Linear time — RE2, Go, Rust" with a footnote for V8/.NET/Ruby.
+- **Verified.** 7 unit tests (eligibility and spans, one tick per position with forward-only head,
+  split/merge/death bookkeeping against `maxThreads`, accepting ticks and test counts against live
+  rows, >1,000× step ratio on the evil regex, surrogate positions, truncated traces). Browser smoke
+  test toggles the mode, checks the mirrored run attributes, the disabled state and message on the
+  backreference preset, the ratio on the evil regex, and switching back. Totals: 1,130 unit tests;
+  5 browser tests in 54 s; lint, typecheck and production build pass. Rendering the second board,
+  the parallel marbles and per-side counters is the next step.
+
+### Steps 4–7: the second board, parallel marbles, synchronised playback and per-side counters
+
+- **Two boards, one layout.** In split mode the scene places the backtracking machine on the left and
+  a second copy of the same `MachineLayout` on the right (`src/scene/LinearSide.tsx`), separated by
+  `SPLIT_GAP`. `splitPlacement` derives both X offsets and a framing metric spanning the pair; the
+  camera frames that and reserves 320 px on the right for the HUD so neither board hides behind it.
+  The left board keeps its flood tank when it floods; the right board never floods, because the
+  linear engine finishes. Each base plate carries its label: "BACKTRACKING · JavaScript, Python,
+  Java, PCRE" and "LINEAR TIME · RE2, Go, Rust".
+- **Synchronised by input position, forward only.** `buildCounters` now also records the head's
+  high-water mark after each event. The right side shows the tick for that waterline (`syncLinear`),
+  so when the left head jerks backward the right side holds still, and when the left finishes or
+  floods the right side snaps to its last tick. The reconstructed head is checked against the
+  waterline for every event of presets 1–5.
+- **Parallel marbles.** One instanced sphere per live thread (`parallelMarbles`): on its gate when it
+  waits at a character test, in the cup once it accepts, else on the node's entry point; threads that
+  share a spot fan out on X. A newborn thread starts at its parent's marble and glides to its own
+  gate with exponential smoothing (instant under reduced motion); merged and dead threads leave.
+  Capped at 256 instances. The right tile rail colours consumed tiles teal and its head never moves
+  backward.
+- **Per-side counters and the ratio.** The HUD gains a two-column strip: left shows the backtracking
+  step count already in the HUD; right shows the linear side's cumulative character tests (one per
+  live non-accepting thread per position), counted as positions are left so both start at 0. The
+  ratio line names the side that did more work ("Backtracking takes 6,827× the steps" on the evil
+  regex; "Linear time takes 1.56× the steps" on `<.+>`, which is honest: several threads stay alive
+  there). Engine instruction totals are mirrored on the canvas but not compared, because the two
+  engines count instructions differently. On phones the strip shows the two counts only.
+- **Verified.** 4 more unit tests (waterline monotonic and equal to the running max head, sync holds
+  on backward steps and snaps at the end, marble placement and cup, split placement framing). The
+  browser smoke test now steps the greedy preset in split mode and checks the right position never
+  exceeds the left head's high-water mark, holds on step back, finishes with the final tick and test
+  count, and that the evil regex floods on the left while the right finishes. Totals: 1,134 unit
+  tests; 5 browser tests; lint, typecheck and production build pass. M7 done-criterion: split mode
+  works for regular patterns with a clear message otherwise.
+
+## M8: UI polish
+
+### Step 1: URL sharing (`src/share.ts`)
+
+- **Hash scheme as planned.** `#p=<base64url pattern>&f=<flags>&s=<base64url string>&m=<single|split>
+  &preset=<id>`. Pattern and string are base64url over UTF-8 with padding stripped, so Unicode,
+  newlines, `#`, `&`, `=` and `%` round-trip without percent-encoding anywhere in the hash. `f` is
+  always written (an empty flag set must also round-trip); `m` is written only for split; `preset` is
+  written only when all three fields equal a preset. When reading, explicit fields win over the
+  preset, so an edited link keeps the edits, and `#preset=…` alone restores the whole preset.
+- **Forgiving reader.** Hashes with no recognised keys (plain anchors, unknown preset ids) are ignored
+  and the defaults load. Corrupt base64 or invalid UTF-8 falls back field by field; flags are
+  filtered to `imsuvy`, de-duplicated into canonical order, and `uv` resolves to `v` as the toggle
+  does; an unknown `m` keeps the current mode; oversized fields are clamped to `PATTERN_MAX` and
+  `STRING_MAX`.
+- **Writing and listening.** The app writes the hash with `history.replaceState` 250 ms after the
+  last change so typing does not pollute history, and listens to `hashchange` so pasting a link into
+  the address bar (or back/forward across hand-edited hashes) updates the inputs, the mode and the
+  camera. Hashes the app itself wrote are recognised and ignored by the listener.
+- **Copy link.** Writes the current state to the hash immediately and the full URL to the clipboard;
+  a status line confirms or, if the clipboard is unavailable, says the address bar already holds it.
+- **Verified.** 4 unit tests round-trip seven samples (Unicode, CR/LF, every flag, split mode, empty
+  pattern and string, 2,000-character string), check preset detection and precedence, and the
+  forgiving cases. The browser smoke test loads a Unicode split-mode link, checks the inputs, flag
+  chip, mode and running comparison, edits the string and watches the hash follow, copies the link
+  and decodes the clipboard, changes the hash by hand and sees the preset and mode switch, and
+  confirms a plain load writes the default preset's hash. Totals: 1,138 unit tests; 6 browser tests;
+  lint, typecheck and production build pass.
+

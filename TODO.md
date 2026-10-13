@@ -20,7 +20,25 @@
   Unicode glyph coverage also depends on browser-local fallback fonts.
 - Finish M5 playback. Steps 1–15 animate the marble, tiles, flags, lifts, alternation and loop
   diverters, gate lamps, lookahead scout, capture brackets, mirror faces and the match celebration.
-  Still open for the milestone: keyboard transport shortcuts (Space, arrows, +/-, F, R), the
-  0.25x/16x/64x/instant speed pills and scrubber markers (attempts, matches, backtrack-density strip),
-  follow-marble camera, and replacing the stale "Static build · playback arrives in M5" stage status.
+  The full 0.25x/0.5x/1x/2x/4x/16x/64x/instant speed ladder is available, including instant results
+  for presets 1–5. Still open for the milestone: keyboard transport shortcuts (Space, arrows, +/-, F, R),
+  scrubber markers (attempts, matches, backtrack-density strip) and the follow-marble camera.
   Capture brackets whose span falls outside the visible tile window are not drawn.
+- M6 fps budget. Flood (sampled tank, log graduations, peak flag columns, settle clock), the
+  Steps/Backtracks/Attempts/Flags/Native/Result HUD and preset 9's calibration are done; presets 6–9
+  flood. Not yet measured: 60 fps on an M1-class laptop and ≥ 30 fps on a mid-range phone with 10,000
+  instanced flood marbles (PLAN §11). Native time is measured on the visitor's machine, so the
+  0.5–2 s calibration of preset 9 only holds for 2023-laptop-class CPUs.
+- Browser coverage is a 46 s smoke set (4 tests). Piece-level playback behaviour (tile rail, flags,
+  carriage, diverters, gate lamps, scout, capture brackets, mirrors, celebration), speed-ladder pose
+  preservation, module expansion, dark/reduced-motion/debug views and the native-worker smoke are no
+  longer exercised in a browser; they rely on unit tests over the pure modules.
+- Desktop footer: at 1280px the orbit hints overlap the Instant speed pill.
+- Split mode polish: the right board repeats module expansion buttons' targets (expanding a module
+  expands both sides, which is correct, but the right side has no gate lamps, diverter levers or
+  capture brackets of its own); parallel marbles are not visualised merging into their owner (they
+  simply disappear); the V8/.NET/Ruby footnote is a tooltip on the ratio line only.
+- M8 remaining: bidirectional pattern↔gate highlighting, presets sheet, legend illustrations, trace
+  log drawer, "How it works" panel, mobile input row polish, a11y pass, reduced-motion audit. URL
+  sharing is done. Module expansion state is not part of the shared URL.
+

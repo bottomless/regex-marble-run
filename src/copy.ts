@@ -1,10 +1,39 @@
+export type NativeReading =
+  | { status: 'running' }
+  | { status: 'success'; elapsedMs: number }
+  | { status: 'timeout'; timeoutMs: number }
+  | { status: 'error' };
+
+export type ResultReading =
+  | { kind: 'pending' }
+  | { kind: 'gaveUp' }
+  | { kind: 'nomatch' }
+  | { kind: 'match'; start: number; end: number };
+
+function nativeTime(reading: NativeReading): string {
+  switch (reading.status) {
+    case 'running':
+      return 'measuring…';
+    case 'timeout':
+      return `over ${(reading.timeoutMs / 1000).toLocaleString('en-US')} s · stopped`;
+    case 'error':
+      return 'unavailable';
+    case 'success': {
+      const ms = reading.elapsedMs;
+      if (ms >= 1000) return `${(ms / 1000).toFixed(2)} s`;
+      if (ms >= 10) return `${Math.round(ms)} ms`;
+      if (ms >= 1) return `${ms.toFixed(1)} ms`;
+      return `${ms.toFixed(2)} ms`;
+    }
+  }
+}
+
 export const copy = {
   brand: 'Regex Marble Run',
   edition: 'REGEX / WORKSHOP 04',
   descriptor: 'A little machine for a regular expression.',
   controls: 'Pattern and test string controls',
   machine: 'Regular expression machine',
-  stageStatus: 'Static build · playback arrives in M5',
   building: 'Building the machine…',
   scene: {
     inlet: 'IN',
@@ -28,6 +57,55 @@ export const copy = {
       '3D regex machine. Drag to orbit, right-drag to pan, scroll to zoom. Focus for keyboard controls.',
     tooLarge: 'This pattern is too large to build. Try a smaller section.',
   },
+  flood: {
+    perMarble: (n: number) => (n === 1 ? '1 marble = 1 backtrack' : `1 marble = ${n.toLocaleString('en-US')} backtracks`),
+    backtracks: (n: number) => `${n.toLocaleString('en-US')} backtracks`,
+    steps: (n: number, gaveUp: boolean) => `${n.toLocaleString('en-US')} steps${gaveUp ? ' · gave up' : ''}`,
+    column: (depth: number) => `peak ×${depth.toLocaleString('en-US')}`,
+    native: (reading: NativeReading) => `Native RegExp · ${nativeTime(reading)}`,
+  },
+  split: {
+    label: 'View mode',
+    single: 'Single',
+    sideBySide: 'Side by side',
+    left: 'Backtracking',
+    leftEngines: 'JavaScript, Python, Java, PCRE',
+    right: 'Linear time',
+    rightEngines: 'RE2, Go, Rust',
+    footnote:
+      'V8 ships a linear-time engine only behind experimental flags; .NET 7+ offers an opt-in NonBacktracking mode; Ruby 3.2+ memoizes away many classic cases.',
+    unavailable: (message: string) => `Side by side is unavailable for this pattern. ${message}`,
+    running: 'Running the linear-time engine…',
+    error: (message: string) => `The linear-time comparison could not run: ${message}`,
+    engineMismatch: 'The worker returned a result from the wrong engine.',
+    sideSteps: (n: number) => `${n.toLocaleString('en-US')} ${n === 1 ? 'step' : 'steps'}`,
+    ratio: (left: number, right: number) => {
+      if (right <= 0 || left <= 0) return 'Counting…';
+      const more = Math.max(left, right) / Math.min(left, right);
+      if (more < 1.005) return 'Same number of steps';
+      const text = more >= 100 ? Math.round(more).toLocaleString('en-US') : more >= 10 ? more.toFixed(1) : more.toFixed(2);
+      return `${left >= right ? 'Backtracking' : 'Linear time'} takes ${text}× the steps`;
+    },
+  },
+  hud: {
+    label: 'Run counters',
+    labels: {
+      steps: 'Steps',
+      backtracks: 'Backtracks',
+      attempts: 'Attempts',
+      flags: 'Flags',
+      native: 'Native time',
+      result: 'Result',
+    },
+    count: (n: number) => n.toLocaleString('en-US'),
+    nativeTime,
+    result: (result: ResultReading) => {
+      if (result.kind === 'pending') return '…';
+      if (result.kind === 'gaveUp') return 'Gave up';
+      if (result.kind === 'nomatch') return 'No match';
+      return `Match @${result.start}..${result.end}`;
+    },
+  },
   editToBuild: 'Adjust the pattern to build the machine.',
   presetsLabel: 'Try a preset',
   customPreset: 'Your own pattern',
@@ -41,6 +119,11 @@ export const copy = {
   expandControls: 'Edit pattern and string',
   collapseControls: 'Fold controls',
   resetView: 'Reset view',
+  share: {
+    copyLink: 'Copy link',
+    copied: 'Link copied. It restores the pattern, string, flags and view.',
+    failed: 'Copy failed. The address bar already holds this link.',
+  },
   legendLabel: 'Machine pieces',
   orbitPointer: 'Drag to orbit · Right-drag or two fingers to pan / zoom',
   orbitKeyboard: 'Arrows orbit · Shift + arrows pan · + / − zoom',
@@ -110,7 +193,7 @@ export const copy = {
     cloudflare: {
       label: 'Cloudflare core pattern',
       caption:
-        'Two greedy loops lead into an equals gate. This is the core pattern with the x=x sample from the postmortem.',
+        'Two greedy loops lead into an equals gate. The postmortem shows x=x matching in 23 steps and 20 x’s with no equals failing in 4,067; this is 1,200 x’s with no equals. Our step counts use a different definition from theirs.',
     },
   },
   characterCount: (count: number, limit: number) => `${count} / ${limit}`,
@@ -126,7 +209,7 @@ export const copy = {
     stepBack: 'Step back one event',
     stepForward: 'Step forward one event',
     speed: 'Playback speed',
-    speedOption: (speed: number) => `${speed}×`,
+    speedOption: (speed: number) => speed === Infinity ? 'Instant' : `${speed}×`,
     scrubber: 'Timeline scrubber',
     stepCount: (current: number, total: number) => `Event ${current} of ${total}`,
   },

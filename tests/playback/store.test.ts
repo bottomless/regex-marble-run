@@ -5,6 +5,7 @@ import type { Trace } from '../../src/engine/trace.ts';
 import { layout } from '../../src/layout/layout.ts';
 import type { MachineLayout } from '../../src/layout/pieces.ts';
 import { TraceCursor } from '../../src/playback/state.ts';
+import { poseAtIndex } from '../../src/playback/motion.ts';
 import { COLLAPSE_SPEED, INSTANT, SPEED_STEPS } from '../../src/playback/timeline.ts';
 import { createPlaybackStore, type PlaybackStore } from '../../src/playback/store.ts';
 import { PRESETS } from '../../src/presets.ts';
@@ -252,6 +253,79 @@ describe('playback store (M5 step 3)', () => {
       expect(s.machine).not.toBeNull();
     });
 
+    it('preserves fractional poses across all finite speeds and back to normal', () => {
+      const { store } = loaded(c);
+      const timeline = store.getState().timeline!;
+      const roll = timeline.segments.findIndex((segment) => segment.kind === 'roll');
+      const index = roll >= 0 ? roll : timeline.segments.findIndex((segment) => segment.kind === 'gate');
+      expect(index).toBeGreaterThanOrEqual(0);
+      const segment = timeline.segments[index];
+      store.getState().seek(segment.t0 + (segment.t1 - segment.t0) * 0.37);
+      const before = store.getState();
+      const pose = poseAtIndex(b.ml, before.timeline!, before.segmentIndex, before.fraction);
+      for (const speed of [...SPEED_STEPS, 1]) {
+        store.getState().setSpeed(speed);
+        const state = store.getState();
+        expect(state.segmentIndex).toBe(before.segmentIndex);
+        expect(state.eventIndex).toBe(before.eventIndex);
+        expect(state.fraction).toBeCloseTo(before.fraction, 10);
+        expect(state.machine).toEqual(before.machine);
+        expect(state.playing).toBe(false);
+        expect(state.atStart).toBe(false);
+        expect(state.atEnd).toBe(false);
+        expect(poseAtIndex(b.ml, state.timeline!, state.segmentIndex, state.fraction)).toEqual(pose);
+      }
+    });
+
+    it('instant settles at the exact final state and stops even while playing', () => {
+      const { store } = loaded(c);
+      store.getState().seekFraction(0.4);
+      store.getState().play();
+      store.getState().setSpeed(INSTANT);
+      const state = store.getState();
+      expect(state.machine).toEqual(new TraceCursor(b.prog, b.trace).stateAt(b.trace.length));
+      expect(state.eventIndex).toBe(b.trace.length - 1);
+      expect(state.atStart).toBe(false);
+      expect(state.atEnd).toBe(true);
+      expect(state.playing).toBe(false);
+      store.getState().setSpeed(1);
+      expect(store.getState().machine).toEqual(state.machine);
+      expect(store.getState().atEnd).toBe(true);
+      expect(store.getState().playing).toBe(false);
+    });
+
+    it('can step back, restart, scrub and play with a zero-duration timeline', () => {
+      const { store } = loaded(c, INSTANT);
+      const cursor = new TraceCursor(b.prog, b.trace);
+      expect(store.getState().atEnd).toBe(true);
+      store.getState().stepBack();
+      expect(store.getState().eventIndex).toBe(b.trace.length - 2);
+      expect(store.getState().machine).toEqual(cursor.stateAt(b.trace.length - 1));
+      expect(store.getState().atStart).toBe(false);
+      expect(store.getState().atEnd).toBe(false);
+      store.getState().restart();
+      expect(store.getState().atStart).toBe(true);
+      expect(store.getState().atEnd).toBe(false);
+      store.getState().seekEvent(1);
+      expect(store.getState().machine).toEqual(cursor.stateAt(2));
+      expect(store.getState().atStart).toBe(false);
+      store.getState().play();
+      expect(store.getState().machine).toEqual(cursor.stateAt(b.trace.length));
+      expect(store.getState().atEnd).toBe(true);
+      expect(store.getState().playing).toBe(false);
+    });
+
+    it('keeps instant selected and settles new traces on load after reset', () => {
+      const { store } = loaded(c, INSTANT);
+      store.getState().reset();
+      store.getState().load({ program: b.prog, trace: b.trace, layout: b.ml });
+      expect(store.getState().speed).toBe(INSTANT);
+      expect(store.getState().atEnd).toBe(true);
+      expect(store.getState().atStart).toBe(false);
+      expect(store.getState().playing).toBe(false);
+      expect(store.getState().machine).toEqual(new TraceCursor(b.prog, b.trace).stateAt(b.trace.length));
+    });
+
     it('collapses travel at high speed but keeps event coverage', () => {
       const { store } = loaded(c, COLLAPSE_SPEED);
       const s = store.getState();
@@ -275,6 +349,18 @@ describe('playback store (M5 step 3)', () => {
       store.getState().toggle();
       expect(calls).toBe(after);
       expect(after).toBeGreaterThan(0);
+    });
+
+    it('layout rebuilds retain the settled endpoint at instant and finite speeds', () => {
+      const { store } = loaded(c);
+      for (const speed of [INSTANT, 1]) {
+        store.getState().setSpeed(speed);
+        const before = store.getState().machine;
+        store.getState().setLayout(layout(b.prog));
+        expect(store.getState().atEnd).toBe(true);
+        expect(store.getState().atStart).toBe(false);
+        expect(store.getState().machine).toEqual(before);
+      }
     });
 
     it('setLayout rebuilds while preserving the current event', () => {

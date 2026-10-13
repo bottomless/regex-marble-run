@@ -93,7 +93,7 @@ export const PRESETS: readonly Preset[] = [
     ...copy.presets.cloudflare,
     pattern: '.*(?:.*=.*)',
     flags: '',
-    input: 'x=x',
+    input: 'x'.repeat(1200),
     source: 'https://blog.cloudflare.com/details-of-the-cloudflare-outage-on-july-2-2019/',
   },
 ];

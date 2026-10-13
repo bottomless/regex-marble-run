@@ -5,6 +5,8 @@ import type { MatchResult } from '../engine/backtrack.ts';
 import type { MachineLayout } from '../layout/pieces.ts';
 import { DEFAULT_KEYFRAME_EVERY, TraceCursor, type MachineState } from './state.ts';
 import { buildTimeline, segmentAt, INSTANT, type Timeline } from './timeline.ts';
+import { buildCounters, type NativeTiming, type RunCounters } from './counters.ts';
+import type { LinearRun } from './linear.ts';
 
 export interface PlaybackLoadInput {
   program: Program;
@@ -13,6 +15,13 @@ export interface PlaybackLoadInput {
   result?: MatchResult;
   speed?: number;
 }
+
+export type LinearState =
+  | { status: 'off' }
+  | { status: 'running' }
+  | { status: 'ready'; run: LinearRun }
+  | { status: 'unavailable'; message: string }
+  | { status: 'error'; message: string };
 
 type Preserve =
   | { kind: 'start' }
@@ -26,6 +35,11 @@ export interface PlaybackState {
   layout: MachineLayout | null;
   result: MatchResult | null;
   cursor: TraceCursor | null;
+  counters: RunCounters | null;
+  /** Native RegExp timing for the same pattern/input; independent of the trace lifecycle. */
+  native: NativeTiming | null;
+  /** Linear-time run for the side-by-side view; null in single mode or while the Pike engine runs. */
+  linear: LinearState;
   timeline: Timeline | null;
   /** eventStarts[e] = time (ms) the first segment of event `e` begins; entry [eventCount] is duration. */
   eventStarts: number[];
@@ -61,11 +75,11 @@ export interface PlaybackState {
   stepBack(): void;
   tick(deltaMs: number): void;
   toggleFollow(): void;
+  setNative(native: NativeTiming | null): void;
+  setLinear(linear: LinearState): void;
 }
 
 export type PlaybackStore = StoreApi<PlaybackState>;
-
-const EPS = 1e-9;
 
 function clamp(value: number, lo: number, hi: number): number {
   return value < lo ? lo : value > hi ? hi : value;
@@ -120,7 +134,7 @@ export function createPlaybackStore(): PlaybackStore {
       const idx = clamp(index, 0, timeline.segments.length - 1);
       const seg = timeline.segments[idx];
       const span = seg.t1 - seg.t0;
-      const frac = span <= 0 ? (fraction > 0 ? 1 : 0) : clamp(fraction, 0, 1);
+      const frac = clamp(fraction, 0, 1);
       const time = seg.t0 + frac * span;
       const eventIndex = seg.event;
       const machine =
@@ -133,8 +147,8 @@ export function createPlaybackStore(): PlaybackStore {
         eventIndex,
         fraction: frac,
         machine,
-        atStart: time <= EPS,
-        atEnd: time >= timeline.duration - EPS,
+        atStart: idx === 0 && frac === 0,
+        atEnd: idx === timeline.segments.length - 1 && frac === 1,
         duration: timeline.duration,
         eventCount: timeline.eventCount,
         ...extra,
@@ -200,6 +214,9 @@ export function createPlaybackStore(): PlaybackStore {
       layout: null,
       result: null,
       cursor: null,
+      counters: null,
+      native: null,
+      linear: { status: 'off' },
       timeline: null,
       eventStarts: [],
       eventSegment: [],
@@ -227,6 +244,7 @@ export function createPlaybackStore(): PlaybackStore {
           layout: input.layout,
           result: input.result ?? null,
           cursor,
+          counters: buildCounters(input.trace),
           timeline,
           eventStarts: maps.eventStarts,
           eventSegment: maps.eventSegment,
@@ -235,7 +253,8 @@ export function createPlaybackStore(): PlaybackStore {
           eventCount: timeline.eventCount,
           playing: false,
         });
-        syncSegment(0, 0, true);
+        if (timeline.instant) syncSegment(timeline.segments.length - 1, 1, true);
+        else syncSegment(0, 0, true);
       },
 
       reset() {
@@ -245,6 +264,7 @@ export function createPlaybackStore(): PlaybackStore {
           layout: null,
           result: null,
           cursor: null,
+          counters: null,
           timeline: null,
           eventStarts: [],
           eventSegment: [],
@@ -258,7 +278,8 @@ export function createPlaybackStore(): PlaybackStore {
       play() {
         const s = get();
         if (!s.timeline) return;
-        if (s.atEnd) syncSegment(0, 0, true, { playing: true });
+        if (s.timeline.instant) syncSegment(s.timeline.segments.length - 1, 1, true, { playing: false });
+        else if (s.atEnd) syncSegment(0, 0, true, { playing: true });
         else set({ playing: true });
       },
 
@@ -282,8 +303,10 @@ export function createPlaybackStore(): PlaybackStore {
           set({ speed });
           return;
         }
-        if (!Number.isFinite(speed)) rebuild({ kind: 'end' }, INSTANT);
-        else if (s.atEnd) rebuild({ kind: 'end' }, speed);
+        if (!Number.isFinite(speed)) {
+          rebuild({ kind: 'end' }, INSTANT);
+          set({ playing: false });
+        } else if (s.atEnd) rebuild({ kind: 'end' }, speed);
         else rebuild({ kind: 'segment', index: s.segmentIndex, fraction: s.fraction }, speed);
       },
 
@@ -293,7 +316,7 @@ export function createPlaybackStore(): PlaybackStore {
           set({ layout });
           return;
         }
-        rebuild({ kind: 'event', event: Math.max(0, s.eventIndex) }, s.speed, layout);
+        rebuild(s.atEnd ? { kind: 'end' } : { kind: 'event', event: Math.max(0, s.eventIndex) }, s.speed, layout);
       },
 
       seek(time) {
@@ -340,6 +363,14 @@ export function createPlaybackStore(): PlaybackStore {
 
       toggleFollow() {
         set({ follow: !get().follow });
+      },
+
+      setNative(native) {
+        set({ native });
+      },
+
+      setLinear(linear) {
+        set({ linear });
       },
     };
   });

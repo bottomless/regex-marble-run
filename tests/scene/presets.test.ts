@@ -13,7 +13,7 @@ const expectedOptions = [
   ['evil-regex', 6, '^(a+)+$', `${'a'.repeat(16)}!`],
   ['another-classic', 7, '^([a-zA-Z]+)*$', `${'a'.repeat(16)}1`],
   ['stackoverflow-whitespace', 8, String.raw`^[\s\u200c]+|[\s\u200c]+$`, `x${' '.repeat(1998)}x`],
-  ['cloudflare-core', 9, '.*(?:.*=.*)', 'x=x'],
+  ['cloudflare-core', 9, '.*(?:.*=.*)', 'x'.repeat(1200)],
 ] as const;
 
 describe('workshop presets', () => {
@@ -93,11 +93,14 @@ describe('workshop presets', () => {
     expect(preset.input.slice(1, -1)).toBe(' '.repeat(1998));
   });
 
-  it('uses the Cloudflare core and the verified postmortem sample', () => {
-    expect(PRESETS.find((preset) => preset.id === 'cloudflare-core')).toMatchObject({
+  it('uses the Cloudflare core on a long no-equals run from the postmortem family', () => {
+    const preset = PRESETS.find((item) => item.id === 'cloudflare-core')!;
+    expect(preset).toMatchObject({
       pattern: '.*(?:.*=.*)',
-      input: 'x=x',
       source: 'https://blog.cloudflare.com/details-of-the-cloudflare-outage-on-july-2-2019/',
     });
+    expect(preset.input).toBe('x'.repeat(1200));
+    expect(preset.input.length).toBeLessThanOrEqual(STRING_MAX);
+    expect(preset.input).not.toContain('=');
   });
 });

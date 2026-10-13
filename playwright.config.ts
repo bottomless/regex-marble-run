@@ -25,10 +25,10 @@ export default defineConfig({
   projects: [
     {
       name: 'desktop',
-      testIgnore: /og\.spec\.ts/,
+      testIgnore: /(og|mobile)\.spec\.ts/,
       use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } },
     },
-    { name: 'mobile', testIgnore: /og\.spec\.ts/, use: { ...devices['Pixel 7'] } },
+    { name: 'mobile', testMatch: /mobile\.spec\.ts/, use: { ...devices['Pixel 7'] } },
     {
       name: 'og',
       testMatch: /og\.spec\.ts/,

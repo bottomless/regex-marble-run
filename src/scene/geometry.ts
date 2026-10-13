@@ -3,6 +3,15 @@ import type { BufferGeometry } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { MachineLayout, Piece, Vec3 } from '../layout/pieces.ts';
 
+export interface TankPlacement {
+  x: number;
+  z: number;
+  width: number;
+  depth: number;
+  height: number;
+  radius: number;
+}
+
 export interface DisplayMetrics {
   scale: number;
   offset: [number, number, number];
@@ -11,6 +20,39 @@ export interface DisplayMetrics {
   depth: number;
   boardWidth: number;
   boardDepth: number;
+  tank: TankPlacement | null;
+}
+
+export const TANK_SPAN = 2.6;
+export const SPLIT_GAP = 1.4;
+
+export interface SplitPlacement {
+  /** X of the left (backtracking) board centre. */
+  leftX: number;
+  /** X of the right (linear-time) board centre. */
+  rightX: number;
+  /** Metrics describing the pair as one object, for camera framing and the ground shadow. */
+  framing: DisplayMetrics;
+}
+
+/** Two boards side by side on X: the left one may carry a flood tank, the right one never does. */
+export function splitPlacement(left: DisplayMetrics, right: DisplayMetrics): SplitPlacement {
+  const total = left.boardWidth + SPLIT_GAP + right.boardWidth;
+  const leftX = -total / 2 + left.boardWidth / 2;
+  const rightX = total / 2 - right.boardWidth / 2;
+  return {
+    leftX,
+    rightX,
+    framing: {
+      ...left,
+      width: total - 2.4,
+      boardWidth: total,
+      height: Math.max(left.height, right.height),
+      depth: Math.max(left.depth, right.depth),
+      boardDepth: Math.max(left.boardDepth, right.boardDepth),
+      tank: null,
+    },
+  };
 }
 
 export type TrackFinish = 'birch' | 'edge' | 'brass' | 'steel' | 'cobalt' | 'vermilion' | 'teal' | 'scout';
@@ -20,20 +62,33 @@ export interface TrackBatch {
   geometry: BufferGeometry;
 }
 
-export function displayMetrics(machine: MachineLayout): DisplayMetrics {
+export function displayMetrics(machine: MachineLayout, options: { flood?: boolean } = {}): DisplayMetrics {
   const { min, max } = machine.bounds;
   const width = Math.max(1, max.x - min.x);
   const height = Math.max(1, max.y - min.y);
   const depth = Math.max(1, max.z - min.z);
   const scale = 11 / Math.max(height, width * 0.85, depth);
+  const scaledHeight = height * scale;
+  const baseBoardWidth = Math.max(6.5, width * scale + 2.4);
+  const boardWidth = options.flood ? baseBoardWidth + TANK_SPAN : baseBoardWidth;
   return {
     scale,
     offset: [-(min.x + max.x) / 2, -min.y, -(min.z + max.z) / 2],
     width: width * scale,
-    height: height * scale,
+    height: scaledHeight,
     depth: depth * scale,
-    boardWidth: Math.max(6.5, width * scale + 2.4),
+    boardWidth,
     boardDepth: Math.max(4.4, depth * scale + 2.8),
+    tank: options.flood
+      ? {
+          x: boardWidth / 2 - TANK_SPAN / 2,
+          z: 0,
+          width: 2,
+          depth: 2,
+          height: Math.min(5.5, Math.max(3, scaledHeight * 0.55)),
+          radius: 0.07,
+        }
+      : null,
   };
 }
 

@@ -1,8 +1,9 @@
 import { useStore } from 'zustand';
 import type { PlaybackStore } from './store.ts';
 import { copy } from '../copy.ts';
+import { INSTANT, SPEED_STEPS } from './timeline.ts';
 
-const SPEEDS = [0.5, 1, 2, 4] as const;
+const SPEEDS = [...SPEED_STEPS, INSTANT];
 
 export interface TransportProps {
   store: PlaybackStore;
