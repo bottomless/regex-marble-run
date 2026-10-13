@@ -23,6 +23,7 @@ import PresetSheet from './ui/PresetSheet.tsx';
 const Workshop = lazy(() => import('./scene/Workshop.tsx'));
 const LegendSheet = lazy(() => import('./ui/LegendSheet.tsx'));
 const HowItWorks = lazy(() => import('./ui/HowItWorks.tsx'));
+const OgView = lazy(() => import('./ui/OgView.tsx'));
 const FLAG_OPTIONS = ['i', 'm', 's', 'u', 'v', 'y'] as const;
 const DEFAULT_DEBUG_PATTERN = '^(a+)+$';
 const SHARE_DEBOUNCE_MS = 250;
@@ -445,6 +446,13 @@ export default function App() {
         pattern={params.get('p') ?? DEFAULT_DEBUG_PATTERN}
         flags={params.get('flags') ?? params.get('f') ?? ''}
       />
+    );
+  }
+  if (params.get('og') === '1') {
+    return (
+      <Suspense fallback={null}>
+        <OgView />
+      </Suspense>
     );
   }
   return <WorkshopApp />;

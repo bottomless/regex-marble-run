@@ -729,3 +729,41 @@ skeleton-only routing; the original milestone context is retained.
   from < 100 ms to < 500 ms: under full-suite load (SwiftShader) the probe occasionally exceeded
   100 ms, which was the only intermittent failure seen across repeated runs; the assertion still
   proves the greedy preset is near-instant natively.
+
+## M9: Launch readiness
+
+### Step 1: OG view & image generation (`src/ui/OgView.tsx`, `tests/e2e/og.spec.ts`, `public/og.png`)
+
+- **Special `?og=1` route.** When loaded with `?og=1`, `App.tsx` routes directly to `OgView`, which
+  initialises the evil preset (`^(a+)+$` on `aaaaaaaaaaaaaaaa!`) in flood mode, sets a light studio
+  theme, hides interactive controls and transport bars, and displays a branded presentation card with
+  the workshop edition, product title, pattern/input pills, and a ReDoS callout badge.
+- **Automated generator.** A dedicated Playwright test (`npm run og` / `tests/e2e/og.spec.ts`) runs at
+  1200×630, waits for the flood canvas to trigger, allows the settle clock to reach mid-flood with
+  instanced marbles streaming into the graduated collection tank, and writes `public/og.png`.
+- **Committed asset.** The generated 141 KB image is checked into version control so Playwright is
+  never invoked during production static builds on Vercel.
+
+### Step 2: Meta tags, copy centralization and README (`index.html`, `src/copy.ts`, `README.md`)
+
+- **Meta tags.** `index.html` specifies standard and mobile viewport configurations (`viewport-fit=cover`),
+  light and dark `theme-color` headers, SVG marble favicon (`/favicon.svg`), and complete Open Graph
+  and Twitter Card metadata pointing to `/og.png` with dimensions 1200×630.
+- **Centralized copy.** All user-visible copy across instructions, transport controls, HUD descriptions,
+  preset captions, piece legend entries, How it works sections, and share feedback resides in
+  `src/copy.ts`.
+- **README.** Full project documentation explaining architecture, local setup, test commands,
+  zero-config Vercel deployment, engine semantics (backtracking vs linear Pike VM), known limits
+  (lookbehind black box, repetition bound limits), and third-party credits.
+
+### Step 3: Performance & test run time bounding
+
+- **Bundle budget.** Initial gzipped JavaScript across all required chunks (`index`, `react`, `r3f`,
+  `Workshop`, `copy`, `three`) totals ~395 kB, well under the 450 kB budget specified in PLAN §11.
+  Secondary components (`LegendSheet`, `HowItWorks`, `TraceLog`, `OgView`) are code-split via `lazy()`.
+- **Test time budget.** Every test script is constrained to complete in under 1 minute:
+  - `npm test`: 1,149 unit tests across 32 files run in ~18 s.
+  - `npm run e2e`: Streamlined to 4 multi-stage tests covering both desktop and mobile viewports,
+    eliminating redundant page reloads and completing in ~35 s.
+  - `npm run og`: 1 test in ~10 s.
+  - `npm run lint` & `npm run typecheck`: < 3 s each.

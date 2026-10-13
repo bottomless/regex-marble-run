@@ -14,7 +14,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:diff:long": "DIFF_LONG=1 vitest run tests/engine/differential.test.ts tests/engine/pike-differential.test.ts",
-    "e2e": "playwright test",
+    "e2e": "playwright test --project=desktop --project=mobile",
     "og": "playwright test tests/e2e/og.spec.ts --project=og",
     "lint": "eslint .",
     "typecheck": "tsc -b --noEmit",

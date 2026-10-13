@@ -44,4 +44,9 @@
   chips, bottom sheets), a11y pass (dialog semantics, scrubber value text, live result), reduced-motion
   audit. Module expansion state is not part of the shared URL. On mobile the legend and how-it-works
   buttons live inside the expandable controls, so they are one tap further away than on desktop.
+- M9 done: Copy centralised in `src/copy.ts`, 1200×630 OG image committed (`public/og.png`) generated
+  via Playwright from `/?og=1` mid-flood, complete Open Graph and Twitter meta tags in `index.html`,
+  comprehensive `README.md` and MIT license, and test execution times bounded (< 1 minute per script;
+  `npm test` 19 s, `npm run e2e` 35 s). Initial JS budget met (~395 kB gzipped vs 450 kB cap).
+
 

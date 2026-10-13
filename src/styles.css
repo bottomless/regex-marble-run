@@ -1741,6 +1741,125 @@ select:hover {
   }
 }
 
+.og-view {
+  position: relative;
+  width: 1200px;
+  height: 630px;
+  overflow: hidden;
+  background: var(--studio);
+}
+
+.og-view .og-stage {
+  position: absolute;
+  inset: 0;
+}
+
+.og-view .workshop-footer,
+.og-view .transport-bar,
+.og-view .control-island,
+.og-view .hud,
+.og-view .trace-log-toggle,
+.og-view .trace-log-drawer {
+  display: none !important;
+}
+
+.og-overlay {
+  position: absolute;
+  top: 36px;
+  left: 36px;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.og-card {
+  display: flex;
+  flex-direction: column;
+  padding: 24px 28px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--paper);
+  box-shadow: 0 4px 0 #d9d1bf, 0 16px 36px rgb(64 49 26 / 12%);
+  max-width: 440px;
+}
+
+.og-edition {
+  margin: 0 0 6px;
+  color: var(--brass);
+  font: 11px / 1.4 var(--mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.og-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.og-mark {
+  width: 32px;
+  height: 32px;
+  fill: none;
+  stroke: var(--brass);
+  stroke-width: 2.2;
+}
+
+.og-brand h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.og-descriptor {
+  margin: 6px 0 16px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.og-pattern-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.og-pattern-pill,
+.og-string-pill {
+  padding: 6px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--field);
+  font: 13px / 1.4 var(--mono);
+}
+
+.og-pattern-pill code {
+  color: var(--vermilion);
+  font-weight: 600;
+}
+
+.og-string-pill code {
+  color: var(--muted);
+}
+
+.og-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 4px;
+  background: rgb(182 72 50 / 10%);
+  color: var(--vermilion);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.og-badge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--vermilion);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
