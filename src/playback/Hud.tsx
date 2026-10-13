@@ -86,7 +86,7 @@ export default function Hud({ store, reducedMotion }: HudProps) {
         </div>
         <div className="hud-item hud-item--result" data-field="result">
           <dt>{copy.hud.labels.result}</dt>
-          <dd>{copy.hud.result(outcome)}</dd>
+          <dd aria-live="polite">{copy.hud.result(outcome)}</dd>
         </div>
       </dl>
       {linear.status !== 'off' && (

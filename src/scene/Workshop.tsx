@@ -1,4 +1,4 @@
-import { Component, Suspense, useEffect, useMemo, useState } from 'react';
+import { Component, lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { useStore } from 'zustand';
@@ -15,11 +15,14 @@ import { captureSpans } from '../playback/captures.ts';
 import Transport from '../playback/Transport.tsx';
 import Hud from '../playback/Hud.tsx';
 import { displayMetrics, splitPlacement } from './geometry.ts';
+import { highlightStore } from '../ui/highlight.ts';
 import { useMaterials } from './materials.ts';
 import Machine from './Machine.tsx';
 import LinearSide from './LinearSide.tsx';
 import { useFloodModel } from './Flood.tsx';
 import Camera from './Camera.tsx';
+
+const TraceLog = lazy(() => import('../ui/TraceLog.tsx'));
 
 interface WorkshopProps {
   program: Program;
@@ -61,6 +64,8 @@ function Scene({
     canvas.setAttribute('data-pieces', String(machine.pieces.length));
     if (!canvas.hasAttribute('data-flood')) canvas.setAttribute('data-flood', 'false');
     const mirror = (s: ReturnType<PlaybackStore['getState']>) => {
+      const activeNode = s.machine?.activeNode ?? null;
+      highlightStore.getState().setActive(activeNode === null ? null : (program.nodes[activeNode]?.span ?? null));
       canvas.setAttribute('data-linear', s.linear.status);
       if (s.linear.status === 'ready') {
         const run = s.linear.run;
@@ -92,7 +97,12 @@ function Scene({
       }
     };
     mirror(store.getState());
-    return store.subscribe(mirror);
+    const unsubscribe = store.subscribe(mirror);
+    return () => {
+      unsubscribe();
+      highlightStore.getState().setActive(null);
+      highlightStore.getState().setHover(null);
+    };
   }, [canvas, machine, program, store, input]);
   const flood = useFloodModel(store);
   const linear = useStore(store, (s) => s.linear);
@@ -271,6 +281,9 @@ function BuildWorkshop(props: WorkshopProps) {
         )}
         <Hud store={playback.store} reducedMotion={props.reducedMotion} />
         <Transport store={playback.store} />
+        <Suspense fallback={null}>
+          <TraceLog store={playback.store} input={props.input} reducedMotion={props.reducedMotion} />
+        </Suspense>
       </>
     </SceneBoundary>
   );

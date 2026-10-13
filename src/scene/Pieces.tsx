@@ -5,19 +5,30 @@ import type { Program } from '../engine/ir.ts';
 import type { MachineLayout, Piece } from '../layout/pieces.ts';
 import { roleFinish } from './geometry.ts';
 import type { TrackFinish } from './geometry.ts';
-import { Hardware } from './Gates.tsx';
+import { Hardware, highlightTint, hoverPiece, usePieceHighlight } from './Gates.tsx';
 import { palette } from './materials.ts';
 import type { Materials } from './materials.ts';
 import Glyph from './Glyph.tsx';
 import { copy } from '../copy.ts';
 
-function CaptureFrame({ piece }: { piece: Piece }) {
+function CaptureFrame({ piece, onHover }: { piece: Piece; onHover?: (piece: Piece | null) => void }) {
   const p = piece.position;
   const w = piece.size.x;
   const h = piece.size.y;
   const color = palette.captures[(piece.node ?? 0) % palette.captures.length];
   return (
-    <group position={[p.x, p.y, p.z]}>
+    <group
+      position={[p.x, p.y, p.z]}
+      onPointerMove={
+        onHover
+          ? (event) => {
+              event.stopPropagation();
+              onHover(piece);
+            }
+          : undefined
+      }
+      onPointerOut={onHover ? () => onHover(null) : undefined}
+    >
       {[-1, 1].map((side) => (
         <group key={side}>
           <mesh position={[(side * w) / 2, 0, 0]}>
@@ -98,6 +109,7 @@ export default function Pieces({
   onExpand: (id: number) => void;
   animatedChoices?: boolean;
 }) {
+  const lit = usePieceHighlight(program);
   const hardware = useMemo(() => {
     const controls = machine.pieces.filter((piece) => piece.kind === 'diverter' || piece.kind === 'funnel');
     const diverters = controls.filter((piece) => piece.kind === 'diverter');
@@ -168,6 +180,8 @@ export default function Pieces({
         material={materials.brass}
         offset={[0, 0, 0.16]}
         rotation={[Math.PI / 2, 0, 0]}
+        color={highlightTint(lit)}
+        onPieceHover={(piece) => hoverPiece(program, piece)}
         castShadow={false}
         receiveShadow={false}
       />
@@ -184,7 +198,8 @@ export default function Pieces({
         )
         .map((piece, i) => {
           const p = piece.position;
-          if (piece.kind === 'groupFrame') return <CaptureFrame key={i} piece={piece} />;
+          if (piece.kind === 'groupFrame')
+            return <CaptureFrame key={i} piece={piece} onHover={(hovered) => hoverPiece(program, hovered)} />;
           if (piece.kind === 'hopper' || piece.kind === 'cup')
             return <Bowl key={i} piece={piece} materials={materials} />;
           if (piece.kind === 'module')

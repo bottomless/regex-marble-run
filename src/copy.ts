@@ -119,12 +119,50 @@ export const copy = {
   expandControls: 'Edit pattern and string',
   collapseControls: 'Fold controls',
   resetView: 'Reset view',
+  sheetClose: 'Close',
   share: {
     copyLink: 'Copy link',
     copied: 'Link copied. It restores the pattern, string, flags and view.',
     failed: 'Copy failed. The address bar already holds this link.',
   },
   legendLabel: 'Machine pieces',
+  legendTitle: 'How to read the machine',
+  legendSheet: [
+    { kind: 'marble', label: 'Marble', detail: 'One marble per match attempt. It enters on the left and rides the track.' },
+    { kind: 'gate', label: 'Gate', detail: 'A brass arch that reads one character or class. Rejected marbles turn back.' },
+    { kind: 'fork', label: 'Diverter', detail: 'Chooses a branch for | or a way through a group. The lever shows the current branch.' },
+    { kind: 'loop', label: 'Loop diverter', detail: 'Greedy loops try another round first; lazy loops try the exit first.' },
+    { kind: 'capture', label: 'Capture frame', detail: 'Frames a group. Brackets on the tile rail show what it caught.' },
+    { kind: 'sensor', label: 'Sensor', detail: 'Checks a position (^, $, \\b, \\B) without reading a character.' },
+    { kind: 'mirror', label: 'Mirror', detail: 'A backreference. Asks for the same characters its capture caught.' },
+    { kind: 'scout', label: 'Scout', detail: 'A lookahead. A small marble runs a side track, reports back, and reads nothing.' },
+    { kind: 'flag', label: 'Flag', detail: 'A saved choice. Backtracking pops the last flag and tries the next option.' },
+  ],
+  howItWorksTitle: 'How it works',
+  howItWorks: [
+    {
+      heading: 'What a step is',
+      body: 'Every gate test, sensor check, diverter choice and loop round counts as one step. The transport at the bottom scrubs through them; the HUD counts them. The trace log lists each step as a plain sentence.',
+    },
+    {
+      heading: 'What the flags mean',
+      body: 'i ignores case. m lets ^ and $ see line breaks. s lets the dot match line breaks. u and v turn on Unicode semantics (they exclude each other). y makes the match start at index 0. g and d do not apply to a single match, so they stay off.',
+    },
+    {
+      heading: 'Why backtracking explodes',
+      body: 'JavaScript, Python, Java and PCRE try one path, plant a flag at every choice, and come back to the last flag on failure. A loop inside a loop lets the same characters be grouped in many ways, so a short string can mean millions of tries. Presets 6 to 9 flood the tank with one marble per sampled backtrack.',
+    },
+    {
+      heading: 'Why linear-time engines do not',
+      body: 'RE2, Go and Rust advance every live thread together, one tile per tick, and never revisit a position. Side-by-side mode runs both machines on the same pattern and counts the steps on each side. The contrast is the point of the exhibit.',
+    },
+    {
+      heading: 'Limits',
+      body: 'Lookbehind is shown as a black box: it runs, but its inner track is not drawn. v-flag string classes are not supported. In side-by-side mode, capture contents can differ between the two engines on patterns with empty loops; the match span always agrees.',
+    },
+  ],
+  credits: 'Parsing by regexpp. Rendering by three.js and React Three Fiber. The linear-time idea is Russ Cox’s “Regular Expression Matching Can Be Simple And Fast”.',
+  creditsLink: 'Read the article',
   orbitPointer: 'Drag to orbit · Right-drag or two fingers to pan / zoom',
   orbitKeyboard: 'Arrows orbit · Shift + arrows pan · + / − zoom',
   reducedMotion: 'Reduced motion',
@@ -195,6 +233,55 @@ export const copy = {
       caption:
         'Two greedy loops lead into an equals gate. The postmortem shows x=x matching in 23 steps and 20 x’s with no equals failing in 4,067; this is 1,200 x’s with no equals. Our step counts use a different definition from theirs.',
     },
+  },
+  traceLog: {
+    label: 'Trace log',
+    toggle: 'Trace log',
+    close: 'Close trace log',
+    copyAll: 'Copy log',
+    copied: 'Log copied.',
+    failed: 'Copy failed.',
+    empty: 'No run yet.',
+    truncated: 'The run went on past the log budget; this is all that was recorded.',
+    copyCap: (total: number) => `… ${total.toLocaleString('en-US')} more steps not copied`,
+    earlier: 'Earlier steps',
+    later: 'Later steps',
+    jumpToPlayhead: 'Jump to the playhead',
+    step: (index: number) => `step ${index + 1}`,
+    seek: (index: number, text: string) => `Go to step ${index + 1}: ${text}`,
+    attempt: (start: number) => `try to match from pos ${start}`,
+    gatePass: (pos: number, label: string, ch: string) => `pos ${pos} · gate ${label} vs ${ch} → passes`,
+    gateReject: (pos: number, label: string, ch: string) => `pos ${pos} · gate ${label} vs ${ch} → rejected`,
+    mirrorPass: (pos: number, label: string, ch: string) => `pos ${pos} · mirror ${label} vs ${ch} → same`,
+    mirrorReject: (pos: number, label: string, ch: string) => `pos ${pos} · mirror ${label} vs ${ch} → different`,
+    sensorHold: (pos: number, label: string) => `pos ${pos} · sensor ${label} → holds`,
+    sensorFail: (pos: number, label: string) => `pos ${pos} · sensor ${label} → fails`,
+    opaquePass: (pos: number, label: string) => `pos ${pos} · black box ${label} → passes`,
+    opaqueReject: (pos: number, label: string) => `pos ${pos} · black box ${label} → rejected`,
+    branch: (option: number, count: number, pos: number) =>
+      `pos ${pos} · diverter tries branch ${option} of ${count}`,
+    loopChoice: (choice: 'again' | 'exit', pos: number) =>
+      `pos ${pos} · loop diverter tries ${choice === 'again' ? 'another round' : 'the exit'}`,
+    option: (option: number, pos: number) => `pos ${pos} · diverter tries option ${option}`,
+    backBranch: (option: number, count: number, pos: number) =>
+      `pos ${pos} · back to the diverter · now branch ${option} of ${count}`,
+    backLoop: (choice: 'again' | 'exit', pos: number) =>
+      `pos ${pos} · back to the loop · now tries ${choice === 'again' ? 'another round' : 'the exit'}`,
+    backOption: (option: number, pos: number) => `pos ${pos} · backtrack · now option ${option}`,
+    iter: (count: number) => `loop round ${count}`,
+    scoutStart: 'scout sets out',
+    scoutEnd: (ok: boolean, negate: boolean) =>
+      negate
+        ? ok
+          ? 'scout returns: found it — the negative check fails'
+          : 'scout returns: nothing found — the negative check passes'
+        : ok
+          ? 'scout returns: found'
+          : 'scout returns: not found',
+    capture: (label: string, start: number, end: number) => `capture ${label} = ${start}..${end}`,
+    captureClear: (label: string) => `capture ${label} cleared`,
+    match: (start: number, end: number) => `match ${start}..${end}`,
+    nomatch: 'no match anywhere',
   },
   characterCount: (count: number, limit: number) => `${count} / ${limit}`,
   parserError: (index: number) => `Pattern error at character ${index + 1}`,

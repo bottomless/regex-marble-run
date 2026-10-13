@@ -650,3 +650,82 @@ skeleton-only routing; the original milestone context is retained.
   confirms a plain load writes the default preset's hash. Totals: 1,138 unit tests; 6 browser tests;
   lint, typecheck and production build pass.
 
+### Step 2: bidirectional pattern↔piece highlighting (`src/ui/highlight.ts`, `src/ui/PatternField.tsx`)
+
+- **One tiny store.** A module-level zustand store holds two spans: `hover` (pointer over a piece or
+  over the pattern) and `active` (the node the marble is working through). Both sides read and write
+  the same store, so neither direction knows about the other. Identical spans are not re-set, which
+  keeps playing at 64× from re-rendering on every event when the span is unchanged.
+- **Pattern side.** The pattern input's own text is transparent (`caret-color` keeps the caret
+  visible); a mirrored backdrop layer underneath paints the two spans as `<mark>` runs
+  (`segmentPattern` splits the source, hover wins over active where they overlap, scroll offsets stay
+  in sync). Hovering a character maps the pointer x to an index through a canvas-measured monospace
+  advance, picks the innermost IR node covering it (`nodeAtIndex`), and highlights that node's span.
+- **Scene side.** `Hardware` (the instanced-mesh helper) learned an `onPieceHover` prop wired to
+  `instanceId`, used by gate arches, sensor discs and diverter buttons; capture frames and the
+  mirror/opaque/gate-label meshes handle pointer events per piece. Highlighted pieces are tinted
+  through per-instance colors (cobalt for hover, vermilion for the playing node) or swap to a lit
+  material. Every piece whose node span sits inside the highlight span lights up, so hovering a
+  group's parenthesis lights the whole group.
+- **Active span.** The workshop's existing store-mirroring effect publishes `machine.activeNode`'s
+  span on every store change and clears both spans on unmount.
+- **Verified.** 5 unit tests cover the index→node mapping, the span→nodes closure, segment merging
+  and clamping. The browser smoke test hovers the pattern, checks the backdrop marks appear and
+  clear, and steps the transport until the active span shows.
+
+### Step 3: trace log drawer (`src/playback/traceLog.ts`, `src/ui/TraceLog.tsx`)
+
+- **Pure formatting.** `describeEvent(program, input, trace, index)` turns each trace event into one
+  plain sentence (`pos 5 · gate a vs "o" → rejected`, `back to the diverter · now branch 2 of 2`,
+  `scout returns: found`). Choose/backtrack option numbers follow the state machine's convention:
+  alternation branches are 1-based on choose and 0-based on backtrack; loop choices map 1→again,
+  0→exit on choose and invert on backtrack. `formatLog` renders the whole log for the clipboard,
+  capped at 20,000 steps with a note about the rest, plus a truncation note when the run went past
+  the trace budget.
+- **The drawer.** A floating toggle (bottom right on desktop, above the transport on phones) opens a
+  right-side panel (full-width sheet on ≤640 px). Rows are windowed: 200 steps around the playhead,
+  with earlier/later paging and a jump-to-playhead button that resumes following. Clicking a row
+  seeks the transport (`aria-current` marks the playhead). Copy log writes the capped text and
+  confirms in a status line. The drawer is the screen-reader-friendly view of the run, lazy-loaded
+  per the bundle budget.
+- **Verified.** 6 unit tests describe attempts, gates, diverters, loops, sensors, captures, mirrors,
+  scouts, matches and no-matches from real engine runs, quote whitespace visibly, and check the copy
+  cap against a genuine 40,000-event trace. The browser smoke test opens the drawer, seeks by
+  clicking a row, and round-trips the clipboard.
+
+### Step 4: presets sheet, legend sheet, "How it works" (`src/ui/Sheet.tsx`, `PresetSheet.tsx`, `LegendSheet.tsx`, `HowItWorks.tsx`)
+
+- **Shared dialog.** `Sheet` gives all three the same behaviour: `role="dialog" aria-modal`, focus
+  moves inside on open and returns on close, Tab cycles within the sheet, Escape and backdrop clicks
+  close. On ≤640 px sheets dock to the bottom edge.
+- **Presets sheet.** The `<select>` is gone; a button showing the current preset opens the full
+  browser: number, label, pattern and caption for all ten, `aria-current` on the active one.
+- **Legend sheet.** "How to read the machine" shows nine pieces (marble, gate, diverter, loop
+  diverter, capture frame, sensor, mirror, scout, flag), each with a small SVG illustration in the
+  track palette and one sentence of copy from `copy.legendSheet`.
+- **How it works.** Five short sections (what a step is, flags, why backtracking explodes, why
+  linear-time engines don't, limits) plus credits for regexpp, three.js / React Three Fiber and the
+  Russ Cox article link. Both sheets are lazy-loaded.
+- **Placement.** The two learn buttons live in the control island under Copy link; the footer keeps
+  the compact piece legend, Reset view and the orbit hints (now hidden below 1600 px, which also
+  fixes the hint/Instant-pill overlap).
+- **Verified.** The browser smoke test opens each sheet, checks the preset count and captions, the
+  nine illustrations and the explainer text, and closes them with Escape.
+
+### Step 5: mobile input row, a11y and reduced-motion passes
+
+- **Mobile.** Pattern input and test string render at 16 px (no iOS focus zoom); flag chips wrap to
+  two rows with 44 px targets; the preset button is a 44 px row. The transport/HUD/footer behaviour
+  from M5–M7 is unchanged.
+- **a11y.** The transport scrubber announces `aria-valuetext` ("Event 4 of 17"); the HUD result cell
+  is `aria-live="polite"`; dialogs follow the Sheet semantics above; the trace log list is the
+  assistive-technology view of the run.
+- **Reduced motion.** The audit found the existing guards intact (no autoplay, instant flood, no
+  camera damping, no build animation, global CSS transition/animation kill). The only new animation,
+  the trace log's playhead scroll, honours `prefers-reduced-motion` with `behavior: 'auto'`.
+- **Verified.** 11 unit tests added (1,149 total); the desktop smoke suite (6 tests) and the mobile
+  suite pass; lint, typecheck and production build pass. M8 done-criterion: the e2e suite passes on
+  desktop and mobile viewports. The native-time assertion in the transport smoke test was relaxed
+  from < 100 ms to < 500 ms: under full-suite load (SwiftShader) the probe occasionally exceeded
+  100 ms, which was the only intermittent failure seen across repeated runs; the assertion still
+  proves the greedy preset is near-instant natively.

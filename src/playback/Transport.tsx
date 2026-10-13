@@ -113,6 +113,7 @@ export default function Transport({ store }: TransportProps) {
           value={Math.max(0, eventIndex)}
           disabled={disabled}
           aria-label={copy.transport.scrubber}
+          aria-valuetext={copy.transport.stepCount(currentStep, eventCount)}
           onChange={(e) => store.getState().seekEvent(Number(e.target.value))}
         />
         <span

@@ -17,8 +17,12 @@ import type { Program } from './engine/ir.ts';
 import { parsePattern, PatternError, PATTERN_MAX, STRING_MAX } from './engine/parse.ts';
 import DebugLayout from './layout/DebugLayout.tsx';
 import { DEFAULT_PRESET, PRESETS, type Preset } from './presets.ts';
+import PatternField from './ui/PatternField.tsx';
+import PresetSheet from './ui/PresetSheet.tsx';
 
 const Workshop = lazy(() => import('./scene/Workshop.tsx'));
+const LegendSheet = lazy(() => import('./ui/LegendSheet.tsx'));
+const HowItWorks = lazy(() => import('./ui/HowItWorks.tsx'));
 const FLAG_OPTIONS = ['i', 'm', 's', 'u', 'v', 'y'] as const;
 const DEFAULT_DEBUG_PATTERN = '^(a+)+$';
 const SHARE_DEBOUNCE_MS = 250;
@@ -74,6 +78,8 @@ function WorkshopApp() {
   const [resetKey, setResetKey] = useState(0);
   const [mode, setMode] = useState<ViewMode>(initial.mode);
   const [copied, setCopied] = useState<'idle' | 'done' | 'failed'>('idle');
+  const [presetsOpen, setPresetsOpen] = useState(false);
+  const [sheet, setSheet] = useState<'legend' | 'how' | null>(null);
   const dark = useMediaQuery('(prefers-color-scheme: dark)');
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
   const deferredDraft = useDeferredValue(draft);
@@ -252,60 +258,43 @@ function WorkshopApp() {
             </p>
           )}
           <div className="preset-picker">
-            <label htmlFor="preset">{copy.presetsLabel}</label>
-            <select
-              id="preset"
-              value={preset?.id ?? ''}
-              onChange={(event) => {
-                const next = PRESETS.find((item) => item.id === event.target.value);
-                if (next) selectPreset(next);
-              }}
+            <span className="preset-picker-label" id="presets-label">
+              {copy.presetsLabel}
+            </span>
+            <button
+              type="button"
+              className="preset-open"
+              aria-labelledby="presets-label"
+              aria-expanded={presetsOpen}
+              data-current-preset={preset?.id}
+              onClick={() => setPresetsOpen(true)}
             >
-              <option value="" disabled>
-                {copy.customPreset}
-              </option>
-              {PRESETS.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {copy.presetOption(item.number, item.label)}
-                </option>
-              ))}
-            </select>
+              <span>{preset ? copy.presetOption(preset.number, preset.label) : copy.customPreset}</span>
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path d="M6 8l4 4 4-4" />
+              </svg>
+            </button>
           </div>
+          {presetsOpen && (
+            <PresetSheet current={preset} onSelect={selectPreset} onClose={() => setPresetsOpen(false)} />
+          )}
 
           <div className="field-heading">
             <label htmlFor="pattern">{copy.patternLabel}</label>
             <span className="field-count">{copy.characterCount(draft.pattern.length, PATTERN_MAX)}</span>
           </div>
-          <div className={`pattern-capsule${error ? ' pattern-capsule--invalid' : ''}`}>
-            <span className="pattern-delimiter" aria-hidden="true">
-              {copy.syntax.slash}
-            </span>
-            <input
-              id="pattern"
-              type="text"
-              value={draft.pattern}
-              maxLength={PATTERN_MAX}
-              spellCheck={false}
-              autoComplete="off"
-              autoCapitalize="off"
-              aria-invalid={Boolean(error)}
-              aria-describedby={error ? 'pattern-hint pattern-error' : 'pattern-hint'}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  pattern: event.target.value.slice(0, PATTERN_MAX),
-                }))
-              }
-            />
-            <span className="pattern-delimiter" aria-hidden="true">
-              {copy.syntax.slash}
-            </span>
-            {draft.flags && (
-              <span className="pattern-flags" aria-hidden="true">
-                {draft.flags}
-              </span>
-            )}
-          </div>
+          <PatternField
+            value={draft.pattern}
+            flags={draft.flags}
+            program={parsed.program}
+            error={error}
+            onChange={(event) =>
+              setDraft((current) => ({
+                ...current,
+                pattern: event.target.value.slice(0, PATTERN_MAX),
+              }))
+            }
+          />
           <p id="pattern-hint" className="sr-only">
             {copy.patternHint}
           </p>
@@ -397,6 +386,15 @@ function WorkshopApp() {
               {copied === 'done' ? copy.share.copied : copied === 'failed' ? copy.share.failed : ''}
             </span>
           </div>
+
+          <div className="learn-row">
+            <button type="button" onClick={() => setSheet('legend')}>
+              {copy.legendTitle}
+            </button>
+            <button type="button" onClick={() => setSheet('how')}>
+              {copy.howItWorksTitle}
+            </button>
+          </div>
         </div>
       </section>
 
@@ -426,6 +424,15 @@ function WorkshopApp() {
           </button>
         </div>
       </footer>
+      {sheet !== null && (
+        <Suspense fallback={null}>
+          {sheet === 'legend' ? (
+            <LegendSheet onClose={() => setSheet(null)} />
+          ) : (
+            <HowItWorks onClose={() => setSheet(null)} />
+          )}
+        </Suspense>
+      )}
     </main>
   );
 }

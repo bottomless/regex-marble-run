@@ -33,12 +33,15 @@
   carriage, diverters, gate lamps, scout, capture brackets, mirrors, celebration), speed-ladder pose
   preservation, module expansion, dark/reduced-motion/debug views and the native-worker smoke are no
   longer exercised in a browser; they rely on unit tests over the pure modules.
-- Desktop footer: at 1280px the orbit hints overlap the Instant speed pill.
+- Desktop footer: the orbit hints overlapped the Instant speed pill; hints are now hidden below
+  1600 px and the learn buttons moved into the control island. Resolved, pending screenshot review.
 - Split mode polish: the right board repeats module expansion buttons' targets (expanding a module
   expands both sides, which is correct, but the right side has no gate lamps, diverter levers or
   capture brackets of its own); parallel marbles are not visualised merging into their owner (they
   simply disappear); the V8/.NET/Ruby footnote is a tooltip on the ratio line only.
-- M8 remaining: bidirectional pattern↔gate highlighting, presets sheet, legend illustrations, trace
-  log drawer, "How it works" panel, mobile input row polish, a11y pass, reduced-motion audit. URL
-  sharing is done. Module expansion state is not part of the shared URL.
+- M8 done: URL sharing, bidirectional pattern↔piece highlighting, presets sheet, illustrated legend
+  sheet, trace log drawer, "How it works" panel, mobile input row polish (16 px inputs, wrapping flag
+  chips, bottom sheets), a11y pass (dialog semantics, scrubber value text, live result), reduced-motion
+  audit. Module expansion state is not part of the shared URL. On mobile the legend and how-it-works
+  buttons live inside the expandable controls, so they are one tap further away than on desktop.
 

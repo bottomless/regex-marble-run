@@ -13,6 +13,7 @@ import {
 import type { BufferGeometry, ColorRepresentation, Material } from 'three';
 import type { MachineLayout, Piece } from '../layout/pieces.ts';
 import type { Program } from '../engine/ir.ts';
+import { highlightStore, nodesWithin, spanForNode, useHighlight } from '../ui/highlight.ts';
 import Glyph from './Glyph.tsx';
 import type { Materials } from './materials.ts';
 
@@ -26,6 +27,7 @@ export function Hardware({
   color,
   castShadow = true,
   receiveShadow = true,
+  onPieceHover,
 }: {
   pieces: Piece[];
   geometry: BufferGeometry;
@@ -36,6 +38,7 @@ export function Hardware({
   color?: ColorRepresentation | ((piece: Piece) => ColorRepresentation);
   castShadow?: boolean;
   receiveShadow?: boolean;
+  onPieceHover?: (piece: Piece | null) => void;
 }) {
   const ref = useRef<InstancedMesh>(null);
   const invalidate = useThree((state) => state.invalidate);
@@ -71,8 +74,45 @@ export function Hardware({
       args={[geometry, material, pieces.length]}
       castShadow={castShadow}
       receiveShadow={receiveShadow}
+      onPointerMove={
+        onPieceHover
+          ? (event) => {
+              event.stopPropagation();
+              const piece = event.instanceId === undefined ? null : (pieces[event.instanceId] ?? null);
+              onPieceHover(piece);
+            }
+          : undefined
+      }
+      onPointerOut={onPieceHover ? () => onPieceHover(null) : undefined}
     />
   );
+}
+
+export type PieceHighlight = Map<number, 'hover' | 'active'>;
+
+/** Pieces whose source span falls inside the hovered pattern span or the span being played. */
+export function usePieceHighlight(program: Program): PieceHighlight {
+  const { hover, active } = useHighlight();
+  return useMemo(() => {
+    const lit: PieceHighlight = new Map();
+    for (const id of nodesWithin(program, active)) lit.set(id, 'active');
+    for (const id of nodesWithin(program, hover)) lit.set(id, 'hover');
+    return lit;
+  }, [program, hover, active]);
+}
+
+export function hoverPiece(program: Program, piece: Piece | null): void {
+  highlightStore.getState().setHover(piece ? spanForNode(program, piece.node) : null);
+}
+
+const HOVER_TINT = '#a8c1ff';
+const ACTIVE_TINT = '#ffbf9e';
+
+export function highlightTint(lit: PieceHighlight): (piece: Piece) => ColorRepresentation {
+  return (piece) => {
+    const tone = piece.node === null ? undefined : lit.get(piece.node);
+    return tone === 'hover' ? HOVER_TINT : tone === 'active' ? ACTIVE_TINT : '#ffffff';
+  };
 }
 
 export default function Gates({
@@ -89,6 +129,19 @@ export default function Gates({
     () => machine.pieces.filter((piece) => piece.kind === 'sensor' || piece.kind === 'scout'),
     [machine],
   );
+  const lit = usePieceHighlight(program);
+  const litMaterial = useMemo(
+    () =>
+      new MeshStandardMaterial({
+        color: '#f0c96a',
+        metalness: 0.55,
+        roughness: 0.35,
+        emissive: '#6b4d12',
+        emissiveIntensity: 0.35,
+      }),
+    [],
+  );
+  useEffect(() => () => litMaterial.dispose(), [litMaterial]);
   const bulbs = useMemo(() => sensors.filter((piece) => piece.kind === 'sensor'), [sensors]);
   const geometry = useMemo(
     () => ({
@@ -136,12 +189,21 @@ export default function Gates({
         material={materials.tracks.edge}
         offset={[0.43, -0.6, 0.2]}
       />
-      <Hardware pieces={gates} geometry={geometry.arch} material={materials.brass} offset={[0, 0.15, 0.2]} />
+      <Hardware
+        pieces={gates}
+        geometry={geometry.arch}
+        material={materials.brass}
+        offset={[0, 0.15, 0.2]}
+        color={highlightTint(lit)}
+        onPieceHover={(piece) => hoverPiece(program, piece)}
+      />
       <Hardware
         pieces={sensors}
         geometry={geometry.sensor}
         material={materials.brass}
         rotation={[Math.PI / 2, 0, 0]}
+        color={highlightTint(lit)}
+        onPieceHover={(piece) => hoverPiece(program, piece)}
         receiveShadow={false}
       />
       <Hardware
@@ -150,7 +212,12 @@ export default function Gates({
         material={sensorMaterials.disc}
         offset={[0, 0, 0.12]}
         rotation={[Math.PI / 2, 0, 0]}
-        color={(piece) => (piece.kind === 'scout' ? '#84afa1' : '#dabd72')}
+        color={(piece) => {
+          const tone = piece.node === null ? undefined : lit.get(piece.node);
+          if (tone === 'hover') return HOVER_TINT;
+          if (tone === 'active') return ACTIVE_TINT;
+          return piece.kind === 'scout' ? '#84afa1' : '#dabd72';
+        }}
         castShadow={false}
         receiveShadow={false}
       />
@@ -168,17 +235,33 @@ export default function Gates({
           const p = piece.position;
           const node = piece.node === null ? null : program.nodes[piece.node];
           const sensor = piece.kind === 'sensor' || piece.kind === 'scout';
+          const pieceLit = piece.node !== null && lit.has(piece.node);
           return (
-            <group key={i} position={[p.x, p.y, p.z]}>
+            <group
+              key={i}
+              position={[p.x, p.y, p.z]}
+              onPointerMove={(event) => {
+                event.stopPropagation();
+                hoverPiece(program, piece);
+              }}
+              onPointerOut={() => hoverPiece(program, null)}
+            >
               {piece.kind === 'gate' ? (
-                <mesh position={[0, 0.74, 0.27]} material={materials.tracks.birch} castShadow>
+                <mesh
+                  position={[0, 0.74, 0.27]}
+                  material={pieceLit ? litMaterial : materials.tracks.birch}
+                  castShadow
+                >
                   <boxGeometry
                     args={[Math.max(0.9, Math.min(2.1, (piece.label?.length ?? 1) * 0.13 + 0.5)), 0.34, 0.14]}
                   />
                 </mesh>
               ) : !sensor ? (
                 <>
-                  <mesh material={piece.kind === 'opaque' ? materials.ink : materials.brass} castShadow>
+                  <mesh
+                    material={pieceLit ? litMaterial : piece.kind === 'opaque' ? materials.ink : materials.brass}
+                    castShadow
+                  >
                     <boxGeometry args={[1.05, 0.95, 0.45]} />
                   </mesh>
                   {piece.kind === 'mirror' && (
