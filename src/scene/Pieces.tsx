@@ -90,11 +90,13 @@ export default function Pieces({
   program,
   materials,
   onExpand,
+  animatedChoices = false,
 }: {
   machine: MachineLayout;
   program: Program;
   materials: Materials;
   onExpand: (id: number) => void;
+  animatedChoices?: boolean;
 }) {
   const hardware = useMemo(() => {
     const controls = machine.pieces.filter((piece) => piece.kind === 'diverter' || piece.kind === 'funnel');
@@ -106,12 +108,21 @@ export default function Pieces({
       bucket[piece.kind === 'diverter' ? 'diverters' : 'funnels'].push(piece);
       buckets.set(finish, bucket);
     }
+    const staticLever = (piece: Piece) => {
+      if (!animatedChoices || piece.node === null) return true;
+      const kind = program.nodes[piece.node]?.kind;
+      return kind !== 'alt' && kind !== 'repeat';
+    };
     return {
       controls,
-      diverters,
-      batches: [...buckets].map(([finish, pieces]) => ({ finish, ...pieces })),
+      diverters: diverters.filter(staticLever),
+      batches: [...buckets].map(([finish, pieces]) => ({
+        finish,
+        ...pieces,
+        handles: pieces.diverters.filter(staticLever),
+      })),
     };
-  }, [machine]);
+  }, [machine, program, animatedChoices]);
   const geometry = useMemo(
     () => ({
       diverter: new CylinderGeometry(0.52, 0.52, 0.24, 24),
@@ -142,7 +153,7 @@ export default function Pieces({
             receiveShadow={false}
           />
           <Hardware
-            pieces={batch.diverters}
+            pieces={batch.handles}
             geometry={geometry.handle}
             material={materials.tracks[batch.finish]}
             offset={[0.82, 0, 0.08]}

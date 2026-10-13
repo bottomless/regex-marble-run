@@ -10,6 +10,7 @@ import { copy } from '../copy.ts';
 import { usePlaybackController } from '../playback/usePlayback.ts';
 import type { PlaybackStore } from '../playback/store.ts';
 import { tileStatus } from '../playback/tiles.ts';
+import { captureSpans } from '../playback/captures.ts';
 import Transport from '../playback/Transport.tsx';
 import { displayMetrics } from './geometry.ts';
 import { useMaterials } from './materials.ts';
@@ -53,7 +54,7 @@ function Scene({
   useEffect(() => {
     canvas.setAttribute('data-pattern', program.source);
     canvas.setAttribute('data-pieces', String(machine.pieces.length));
-    const dispose = store.subscribe((s) => {
+    const mirror = (s: ReturnType<PlaybackStore['getState']>) => {
       canvas.setAttribute('data-event-index', String(s.eventIndex));
       canvas.setAttribute('data-event-count', String(s.eventCount));
       if (s.machine) {
@@ -64,13 +65,16 @@ function Scene({
           if (tileStatus(s.machine, i) !== 'pending') lit.push(i);
         }
         canvas.setAttribute('data-lit-tiles', lit.join(','));
+        canvas.setAttribute('data-captures', JSON.stringify(captureSpans(s.machine)));
       } else {
         canvas.setAttribute('data-head', '-1');
         canvas.setAttribute('data-attempt-start', '-1');
         canvas.setAttribute('data-lit-tiles', '');
+        canvas.setAttribute('data-captures', '[]');
       }
-    });
-    return dispose;
+    };
+    mirror(store.getState());
+    return store.subscribe(mirror);
   }, [canvas, machine, program, store, input]);
   const metrics = useMemo(() => displayMetrics(machine), [machine]);
   const studio = dark ? '#22231f' : '#f3f0e8';

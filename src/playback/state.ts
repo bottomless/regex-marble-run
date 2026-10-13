@@ -14,6 +14,25 @@ export interface FlagEntry {
 
 export type PlaybackPhase = 'idle' | 'running' | 'matched' | 'nomatch';
 
+export type LoopChoice = 'again' | 'exit';
+
+export type GateStatus = 'pass' | 'reject';
+
+export interface ScoutRead {
+  node: NodeId;
+  event: number;
+  pos: number;
+  len: number;
+  ok: boolean;
+}
+
+export interface ScoutFrame {
+  node: NodeId;
+  start: number;
+  end: number | null;
+  reads: ScoutRead[];
+}
+
 export interface MachineState {
   index: number;
   phase: PlaybackPhase;
@@ -22,20 +41,27 @@ export interface MachineState {
   head: number;
   flags: FlagEntry[];
   counters: Map<NodeId, number>;
+  selectedBranches: Map<NodeId, number>;
+  loops: Map<NodeId, LoopChoice>;
+  gates: Map<NodeId, GateStatus>;
+  scouts: ScoutFrame[];
+  scoutClosing: ScoutFrame | null;
   captures: (CaptureSpan | null)[];
   activeNode: NodeId | null;
   match: CaptureSpan | null;
 }
 
-interface FlagDraft extends FlagEntry {
+interface Scope {
   caps: (CaptureSpan | null)[];
   counters: Map<NodeId, number>;
+  selectedBranches: Map<NodeId, number>;
+  loops: Map<NodeId, LoopChoice>;
+  gates: Map<NodeId, GateStatus>;
 }
 
-interface LookDraft {
-  caps: (CaptureSpan | null)[];
-  counters: Map<NodeId, number>;
-}
+interface FlagDraft extends FlagEntry, Scope {}
+
+type LookDraft = Scope;
 
 interface Draft {
   index: number;
@@ -45,6 +71,11 @@ interface Draft {
   head: number;
   flags: FlagDraft[];
   counters: Map<NodeId, number>;
+  selectedBranches: Map<NodeId, number>;
+  loops: Map<NodeId, LoopChoice>;
+  gates: Map<NodeId, GateStatus>;
+  scouts: ScoutFrame[];
+  scoutClosing: ScoutFrame | null;
   captures: (CaptureSpan | null)[];
   activeNode: NodeId | null;
   match: CaptureSpan | null;
@@ -62,6 +93,11 @@ export function createDraft(groupCount: number): Draft {
     head: 0,
     flags: [],
     counters: new Map(),
+    selectedBranches: new Map(),
+    loops: new Map(),
+    gates: new Map(),
+    scouts: [],
+    scoutClosing: null,
     captures: new Array<CaptureSpan | null>(groupCount + 1).fill(null),
     activeNode: null,
     match: null,
@@ -73,14 +109,53 @@ function cloneCaps(caps: (CaptureSpan | null)[]): (CaptureSpan | null)[] {
   return caps.map((c) => (c === null ? null : { ...c }));
 }
 
+function cloneScout(frame: ScoutFrame): ScoutFrame {
+  return { ...frame, reads: frame.reads.map((read) => ({ ...read })) };
+}
+
+function cloneScope(s: Scope): Scope {
+  return {
+    caps: cloneCaps(s.caps),
+    counters: new Map(s.counters),
+    selectedBranches: new Map(s.selectedBranches),
+    loops: new Map(s.loops),
+    gates: new Map(s.gates),
+  };
+}
+
+function saveScope(d: Draft): Scope {
+  return cloneScope({
+    caps: d.captures,
+    counters: d.counters,
+    selectedBranches: d.selectedBranches,
+    loops: d.loops,
+    gates: d.gates,
+  });
+}
+
+function restoreScope(d: Draft, s: Scope, captures: boolean): void {
+  if (captures) {
+    d.captures = cloneCaps(s.caps);
+    d.counters = new Map(s.counters);
+  }
+  d.selectedBranches = new Map(s.selectedBranches);
+  d.loops = new Map(s.loops);
+  d.gates = new Map(s.gates);
+}
+
 function cloneDraft(d: Draft): Draft {
   return {
     ...d,
-    flags: d.flags.map((f) => ({ ...f, caps: cloneCaps(f.caps), counters: new Map(f.counters) })),
+    flags: d.flags.map((f) => ({ node: f.node, option: f.option, pos: f.pos, ...cloneScope(f) })),
     counters: new Map(d.counters),
+    selectedBranches: new Map(d.selectedBranches),
+    loops: new Map(d.loops),
+    gates: new Map(d.gates),
+    scouts: d.scouts.map(cloneScout),
+    scoutClosing: d.scoutClosing === null ? null : cloneScout(d.scoutClosing),
     captures: cloneCaps(d.captures),
     match: d.match === null ? null : { ...d.match },
-    looks: d.looks.map((l) => ({ caps: cloneCaps(l.caps), counters: new Map(l.counters) })),
+    looks: d.looks.map(cloneScope),
   };
 }
 
@@ -93,14 +168,22 @@ export function snapshot(d: Draft): MachineState {
     head: d.head,
     flags: d.flags.map((f) => ({ node: f.node, option: f.option, pos: f.pos })),
     counters: new Map(d.counters),
+    selectedBranches: new Map(d.selectedBranches),
+    loops: new Map(d.loops),
+    gates: new Map(d.gates),
+    scouts: d.scouts.map(cloneScout),
+    scoutClosing: d.scoutClosing === null ? null : cloneScout(d.scoutClosing),
     captures: cloneCaps(d.captures),
     activeNode: d.activeNode,
     match: d.match === null ? null : { ...d.match },
   };
 }
 
-function applyTraceEvent(d: Draft, tr: Trace, i: number, isNegatedLook: (node: NodeId) => boolean): void {
+type Kind = (node: NodeId) => 'alt' | 'repeat' | 'negLook' | 'other';
+
+function applyTraceEvent(d: Draft, tr: Trace, i: number, kindOf: Kind): void {
   d.index++;
+  d.scoutClosing = null;
   const a = tr.a[i];
   const b = tr.b[i];
   const c = tr.c[i];
@@ -113,6 +196,10 @@ function applyTraceEvent(d: Draft, tr: Trace, i: number, isNegatedLook: (node: N
       d.head = a;
       d.flags.length = 0;
       d.counters.clear();
+      d.selectedBranches.clear();
+      d.loops.clear();
+      d.gates.clear();
+      d.scouts.length = 0;
       d.captures.fill(null);
       d.activeNode = null;
       d.match = null;
@@ -122,39 +209,48 @@ function applyTraceEvent(d: Draft, tr: Trace, i: number, isNegatedLook: (node: N
     case T.test: {
       d.activeNode = a;
       d.head = c === 1 ? b + dd : b;
+      d.gates.set(a, c === 1 ? 'pass' : 'reject');
+      const scout = d.scouts.at(-1);
+      if (scout) scout.reads.push({ node: a, event: i, pos: b, len: dd, ok: c === 1 });
       break;
     }
     case T.choose: {
-      d.flags.push({ node: a, option: b, pos: c, caps: cloneCaps(d.captures), counters: new Map(d.counters) });
+      d.flags.push({ node: a, option: b, pos: c, ...saveScope(d) });
+      const kind = kindOf(a);
+      if (kind === 'alt') d.selectedBranches.set(a, b - 1);
+      else if (kind === 'repeat') d.loops.set(a, b === 1 ? 'again' : 'exit');
       d.activeNode = a;
       break;
     }
     case T.backtrack: {
       const f = d.flags.pop();
-      if (f) {
-        d.captures = cloneCaps(f.caps);
-        d.counters = new Map(f.counters);
-      }
+      if (f) restoreScope(d, f, true);
+      const kind = kindOf(a);
+      if (kind === 'alt') d.selectedBranches.set(a, b);
+      else if (kind === 'repeat') d.loops.set(a, b === 1 ? 'exit' : 'again');
       d.head = c;
       d.activeNode = a;
       break;
     }
     case T.iter: {
       d.counters.set(a, b);
+      d.loops.set(a, 'again');
       d.activeNode = a;
       break;
     }
     case T.look: {
       if (b === 0) {
-        d.looks.push({ caps: cloneCaps(d.captures), counters: new Map(d.counters) });
+        d.looks.push(saveScope(d));
+        d.scouts.push({ node: a, start: i, end: null, reads: [] });
+        d.gates.delete(a);
       } else {
         const lk = d.looks.pop();
+        const frame = d.scouts.pop();
         const ok = c === 1;
-        if (lk && (isNegatedLook(a) || !ok)) {
-          d.captures = cloneCaps(lk.caps);
-          d.counters = new Map(lk.counters);
-        }
+        if (frame) d.scoutClosing = { ...frame, end: i };
+        if (lk) restoreScope(d, lk, kindOf(a) === 'negLook' || !ok);
         if (d.flags.length > dd) d.flags.length = dd;
+        d.gates.set(a, ok ? 'pass' : 'reject');
       }
       d.activeNode = a;
       break;
@@ -172,15 +268,19 @@ function applyTraceEvent(d: Draft, tr: Trace, i: number, isNegatedLook: (node: N
     }
     case T.nomatch: {
       d.phase = 'nomatch';
+      d.selectedBranches.clear();
+      d.loops.clear();
+      d.captures.fill(null);
       d.flags.length = 0;
       d.looks.length = 0;
+      d.scouts.length = 0;
       break;
     }
   }
 }
 
 export class TraceCursor {
-  private readonly negate: (node: NodeId) => boolean;
+  private readonly kindOf: Kind;
   private readonly keyframes = new Map<number, Draft>();
   private builtTo = 0;
 
@@ -189,9 +289,11 @@ export class TraceCursor {
     private readonly trace: Trace,
     private readonly keyframeEvery: number = DEFAULT_KEYFRAME_EVERY,
   ) {
-    this.negate = (node) => {
+    this.kindOf = (node) => {
       const n = prog.nodes[node];
-      return n !== undefined && n.kind === 'look' && n.negate;
+      if (n === undefined) return 'other';
+      if (n.kind === 'alt' || n.kind === 'repeat') return n.kind;
+      return n.kind === 'look' && n.negate ? 'negLook' : 'other';
     };
     this.keyframes.set(0, createDraft(prog.groupCount));
   }
@@ -210,7 +312,7 @@ export class TraceCursor {
       if (k <= index && k > base) base = k;
     }
     const draft = cloneDraft(this.keyframes.get(base)!);
-    for (let i = base; i < index; i++) applyTraceEvent(draft, this.trace, i, this.negate);
+    for (let i = base; i < index; i++) applyTraceEvent(draft, this.trace, i, this.kindOf);
     return snapshot(draft);
   }
 
@@ -219,7 +321,7 @@ export class TraceCursor {
     while (this.builtTo + this.keyframeEvery <= target) {
       const next = this.builtTo + this.keyframeEvery;
       const draft = cloneDraft(this.keyframes.get(this.builtTo)!);
-      for (let i = this.builtTo; i < next; i++) applyTraceEvent(draft, this.trace, i, this.negate);
+      for (let i = this.builtTo; i < next; i++) applyTraceEvent(draft, this.trace, i, this.kindOf);
       this.keyframes.set(next, draft);
       this.builtTo = next;
     }

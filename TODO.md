@@ -18,5 +18,9 @@
   show distinct controls and main tracks, but small gate captions and muted capture frames still
   need a focused contrast/legibility review. All-preset visual readability acceptance remains open.
   Unicode glyph coverage also depends on browser-local fallback fonts.
-- Implement trace-driven marble playback in M5. M4 has physical tracks, continuation return routes,
-  scoped scout routes, and a static input rail, but does not animate regex execution.
+- Finish M5 playback. Steps 1–15 animate the marble, tiles, flags, lifts, alternation and loop
+  diverters, gate lamps, lookahead scout, capture brackets, mirror faces and the match celebration.
+  Still open for the milestone: keyboard transport shortcuts (Space, arrows, +/-, F, R), the
+  0.25x/16x/64x/instant speed pills and scrubber markers (attempts, matches, backtrack-density strip),
+  follow-marble camera, and replacing the stale "Static build · playback arrives in M5" stage status.
+  Capture brackets whose span falls outside the visible tile window are not drawn.

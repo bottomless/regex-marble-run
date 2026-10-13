@@ -307,3 +307,150 @@ skeleton-only routing; the original milestone context is retained.
   pauses, restarts (tile 0 holds the head marker at event 0), scrubs to the final match (`4,5,6` lit for
   `c(a|o)t` on `the cot`), and restarts back — with zero console errors. Full suite: 947 unit tests, 8/8
   e2e (playback + static) on desktop Chromium.
+
+### Step 9: saved-choice flag markers (`src/playback/flags.ts`, `src/scene/Flags.tsx`)
+
+- **State-derived, not an animation history.** `flagMarkers(layout, machine.flags)` preserves each
+  choice's node, alternative, input position and global stack index. Repeated choices stack upward at
+  `flagSlot`; collapsed descendants share one column beside their visible module. Layout expansion
+  relocates markers without changing the saved choices. Missing anchors are skipped rather than drawn
+  at an invented origin.
+- **Instanced brass and enamel hardware.** `Flags` subscribes only to the saved-choice array and renders
+  poles, finials and pennants using the existing `Hardware` batches and diverter-role materials. The top
+  flag in each column labels the saved read position. Markers live in the machine's layout-space group,
+  appear and disappear immediately, and invalidate the demand canvas on changes, including paused seeks.
+  This also respects reduced motion without a separate plant/pop clock. Flood-mode sampling and dynamic
+  camera framing of exceptionally tall columns remain separate work.
+- **Exact rewind semantics.** Backtracking pops markers; stepping backward reconstructs them. Outstanding
+  choices remain visible after a match, scoped lookahead choices disappear on completion, and new attempts
+  or reset clear the stack. Canvas `data-flags` and `data-flag-count` reflect the descriptors committed by
+  the flag renderer, not a second store-based rendering implementation.
+- **Verified.** 23 new unit tests cover stacking, duplicate choices, per-node columns, all events in
+  presets 1–5, forward/backward stepping, lookahead cleanup and collapsed-module expansion. The new
+  Playwright case checks plant, pop, backward restoration, scrub restoration and restart with zero browser
+  errors on desktop and mobile. Typecheck, lint and build pass; 970 unit tests and all 18 browser tests pass.
+
+### Step 10: backtracking lift carriage (`src/playback/carriage.ts`, `src/scene/Carriage.tsx`)
+
+- **The ride is the current segment, not a remembered animation.** `carriageAtIndex` places a deck only
+  while the playhead is on a `lift` segment or on a `drop` whose route climbs a `backLift` edge. The deck
+  is a fixed offset from the rail point at that fraction, and the hero marble uses a matching cradle
+  offset so it sits in the carriage. Off the ride the carriage is hidden. Pause, scrub and step-back
+  recompute the same pose; there is no plant/travel clock to drift.
+- **Vertical shafts do not spin.** Yaw comes from the horizontal part of the travel direction. A nearly
+  vertical back-lift keeps a stable facing instead of flipping as the tangent passes through pure +Y.
+- **Demand-render safe.** The mesh moves in `useFrame` after the marble's single `tick`, and a store
+  subscription writes `data-carriage` / `data-carriage-riding` and invalidates the canvas, including when
+  playback is paused. Reduced motion gets the same instant pose with no extra tween.
+- **Verified.** 28 unit tests cover presets 1–5, greedy retreat and alternation: fixed deck offset,
+  monotonic travel, backward time-scrub equality, event step-back restoration, collapsed jumps, and the
+  first-ride backtrack appearing at the drop and disappearing on the next event. Playwright scrubs to that
+  backtrack, checks the rendered attribute, steps forward and back, and restarts, with zero console errors.
+
+### Step 11: selected and saved alternation branches (`src/playback/alternation.ts`, `src/scene/Alternations.tsx`)
+
+- **Selected is not saved.** Alternation `choose(node, b)` saves branch `b` while selecting `b - 1`;
+  `backtrack(node, b)` selects `b`. The reducer keeps `selectedBranches` separately from the flag stack,
+  and `alternationMarkers` counts saved continuations independently, including repeated entries for the
+  same lane. Binary, multiway and empty branches use the same state-derived descriptors.
+- **Choice-scoped rewind.** Each choice snapshots selections before changing them. Every backtrack restores
+  that map, including repeat rollback, before applying any new alternation selection. Look completion
+  restores pre-look selections without changing existing capture semantics. Attempts and nomatch clear
+  selections; match retains them. Keyframes and public snapshots clone maps so seeks and caller mutation
+  cannot leak state between events.
+- **Live diverter and lane markers.** A teal pointer and numbered ACTIVE lane replace the static alternation
+  lever; brass rings and SAVED labels show pending alternatives. Repeat hardware is unchanged. Collapsed
+  alternatives omit their markers but retain state for expansion. The renderer subscribes only to machine
+  state, mirrors committed descriptors in canvas `data-alternations`, and invalidates demand rendering on
+  change; there is no second clock or history-dependent tween.
+- **Verified.** 23 new unit tests cover branch selection, nested and repeated rollback, look scopes,
+  snapshot isolation, keyframes, seeking and expansion. Binary and ternary Playwright cases verify saved
+  lanes, forward/backward steps, scrubbing and restart with zero browser errors on desktop and mobile.
+  Browser angle assertions tolerate insignificant Node/Chromium floating-point differences. All 1,021
+  unit tests and 24 browser tests pass, along with typecheck, lint and production build.
+
+### Step 12: loop diverters and counter dials (`src/playback/repeats.ts`, `src/scene/Repeats.tsx`)
+
+- **Again and exit from trace events, not from counters.** A repeat `choose(node, option)` saves
+  `option` (1 = exit for greedy, 0 = again for lazy) and selects the other direction; `backtrack(node,
+  option)` selects `option`; every `iter` selects again, which also covers forced iterations below `min`
+  that never plant a flag. A forced exit at `max` emits no event, so the diverter keeps its last setting.
+  Loop choices live in their own `loops` map rather than in `selectedBranches`, keeping alternation state
+  and tests untouched. The dial reads the existing `counters` map, so it rolls back with every backtrack.
+- **One scope snapshot per choice.** Captures, counters, branch selections, loop choices and gate results
+  are now cloned together as one `Scope` at every flag and look frame. Backtracking restores the whole
+  scope; look completion always restores selections, loops and gates, and restores captures/counters only
+  for negative or failed lookaheads, preserving the step-1 capture rule.
+- **Pointer and dial.** The again pointer aims at the body entry, the exit pointer along the bypass
+  chute's first control point. The dial sits beside the diverter opposite the flag column and shows the
+  iteration count, the current direction, and whether a saved fallback exists for the other direction.
+  Static repeat levers are hidden when live indicators are mounted; the greedy/lazy glyph and `min…max`
+  label stay.
+
+### Step 13: gate outcomes and sensor lamps (`src/playback/gates.ts`, `src/scene/GateLamps.tsx`)
+
+- **Results are path state.** Each `test` writes `pass`/`reject` for its node into the scope. A gate that
+  rejects shows an open trapdoor only until the backtrack restores the choice-point scope, when it
+  returns to its earlier state; gates passed before the choice stay lit. New attempts clear every lamp;
+  `match` and `nomatch` keep them so the final run stays readable. Lookahead completion restores the inner
+  lamps to their pre-look state and lights the scout lamp with the assertion's own outcome.
+- **Lamps are state, not flashes.** The brief's "flash" is realised as a persistent lamp for sensors,
+  mirror gates, sealed lookbehind gates and scouts, so pausing or scrubbing shows the same frame as
+  playing, and reduced motion needs no separate path. The most recently tested node also gets a teal halo.
+- **Verified.** 17 repeat tests and 12 gate tests cover greedy/lazy/optional/bounded loops, nested
+  catastrophic rollback, look scopes, attempt/match/nomatch handling, sensors, mirrors, lookbehind,
+  collapsed modules, keyframe equivalence, snapshot isolation and store rewind parity. Three new Playwright
+  cases (greedy loop, lazy loop, gates and sensors) pass on desktop and mobile with zero browser errors.
+  Totals: 1,050 unit tests, 30 browser tests; typecheck, lint and production build pass.
+
+### Step 14: lookahead scout (`src/playback/scout.ts`, `src/scene/Scout.tsx`)
+
+- **Scout frames are reducer state.** A `look` start pushes a `ScoutFrame { node, start, end: null, reads }`
+  onto `scouts`; every `test` inside records a `ScoutRead` (node, event, pos, len, ok) on the innermost
+  open frame; the matching `look` end pops the frame and parks it in `scoutClosing` with `end` set for
+  exactly one event, so the return trip has a home in the state rather than in a renderer clock. Nested
+  lookaheads therefore show only the innermost scout. Attempts and `nomatch` clear open frames; keyframes
+  and public snapshots deep-clone frames so callers cannot corrupt later seeks.
+- **Ghost tiles are derived, not lit.** `scoutTiles(frame)` is the sorted union of `[pos, pos+len)` over the
+  frame's reads, including failed reads (the scout did look at that tile) and excluding zero-length sensor
+  reads. The rail draws these as a translucent teal cap above the tile without changing `tileStatus`, so
+  the main read head and consumed tiles stay exactly as the engine's `curPos` dictates: a lookahead never
+  consumes.
+- **Pose from event coordinates.** `scoutPose(layout, frame, eventIndex + fraction)` interpolates straight
+  lines between event-indexed stops: home (first point of the scout side track, falling back to the
+  assertion gate) at `start`, each inner gate at its `read.event`, a hold at the last gate until `end`,
+  and home again at `end + 1`. Using the continuous event coordinate rather than timeline time means
+  the scout agrees with scrubbing, stepping and instant speed with no separate tween; the scout is
+  hidden whenever no frame is active.
+- **Verified.** 10 unit tests cover open/record/close, failed and zero-length reads, nested scopes,
+  negative lookahead outcomes, clearing on attempt/nomatch, stop/pose geometry, finite in-bounds poses
+  for presets 1–5, forward/backward store parity, keyframe equivalence and snapshot isolation. The
+  Playwright case scrubs through `c(?=o)ot` on `cot`, checking the window, ghost tile `1`, step
+  back/forward, closing frame and return with zero browser errors on desktop and mobile.
+
+### Step 15: capture brackets, mirror faces and the finish celebration (`src/playback/captures.ts`, `src/scene/Mirrors.tsx`, `src/scene/Celebration.tsx`)
+
+- **Brackets straight from `captures`.** `captureBrackets(program, state)` lists every set group other
+  than 0 with its name and a colour from `palette.captures` cycled by group number, so the bracket colour
+  matches the group's frame in the machine. Brackets appear when a group closes, vanish when a quantified
+  iteration resets the group, come back when a backtrack restores the scope, and clear on every new
+  attempt; none of this is tracked separately because the step-1 reducer already restores `captures`.
+  Brackets sit above the tile rail at the tile x-positions of `start`/`end`; spans outside the visible
+  tile window are skipped rather than drawn at a guessed position.
+- **Mirror text resolves like the engine.** `mirrorText` shows the first set group a backreference can
+  resolve to (duplicate named groups resolve in order), empty before the group is set, and truncates
+  past 12 characters with an ellipsis. The face is a light plate on the mirror gate because the brass
+  mirror material renders dark under the environment and swallowed dark text.
+- **Celebration only after `match`.** `matchSpan` is non-null only when `phase === 'matched'`, so the
+  gold tiles, brass rings over the cup and the `MATCH @start..end` chip appear on the final event and
+  disappear when stepping back one event. A matched run also keeps its brackets, flags and lamps per the
+  earlier steps, so the end frame reads as a complete result.
+- **Canvas mirrors are written immediately.** `Scene` now writes `data-event-index`/`data-head`/
+  `data-lit-tiles`/`data-captures` from `store.getState()` when it subscribes, not only on the next
+  store change. The engine can finish loading while the scene is still suspended on first mount, which
+  previously left those attributes unset until the first transport action.
+- **Verified.** 7 unit tests cover bracket colours and names, iteration reset and restore, attempt
+  clearing, mirror text (live update, unset, duplicate names, truncation), celebration timing, backward
+  stepping parity for presets 1–5 and snapshot isolation. The Playwright case drives `(?<dup>a)\k<dup>`
+  on `aa` through capture close, match, step back and restart on desktop and mobile. Totals: 1,067 unit
+  tests, 34 browser tests; typecheck, lint and production build pass.

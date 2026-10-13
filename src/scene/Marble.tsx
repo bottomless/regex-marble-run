@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import type { Mesh } from 'three';
 import type { MachineLayout } from '../layout/pieces.ts';
+import { carriageAtIndex, carriedMarblePosition } from '../playback/carriage.ts';
 import type { PlaybackStore } from '../playback/store.ts';
 import { poseAtIndex } from '../playback/motion.ts';
 import type { Materials } from './materials.ts';
@@ -33,10 +34,14 @@ export default function Marble({
     const snapshot = store.getState();
     const mesh = ref.current;
     if (!mesh) return;
+    const riding = snapshot.timeline
+      ? carriageAtIndex(machine, snapshot.timeline, snapshot.segmentIndex, snapshot.fraction)
+      : null;
     const pose = snapshot.timeline ? poseAtIndex(machine, snapshot.timeline, snapshot.segmentIndex, snapshot.fraction) : null;
     if (pose) {
+      const carried = riding ? carriedMarblePosition(riding.rail) : pose.position;
       mesh.visible = true;
-      mesh.position.set(pose.position.x, pose.position.y, pose.position.z);
+      mesh.position.set(carried.x, carried.y, carried.z);
     } else {
       mesh.visible = false;
     }
