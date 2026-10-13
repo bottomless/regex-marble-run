@@ -62,21 +62,21 @@ export const SPEED_STEPS = [0.25, 0.5, 1, 2, 4, 16, 64] as const;
 export const COLLAPSE_SPEED = 16;
 
 const BASE_MS: Record<SegmentKind, number> = {
-  hop: 260,
-  roll: 160,
-  gate: 220,
-  drop: 160,
-  lift: 320,
-  flag: 140,
-  iter: 70,
-  scout: 180,
+  hop: 520,
+  roll: 320,
+  gate: 440,
+  drop: 320,
+  lift: 640,
+  flag: 280,
+  iter: 140,
+  scout: 360,
   capture: 0,
-  finish: 260,
+  finish: 520,
 };
 
-const ROLL_PER_UNIT_MS = 45;
-const ROLL_MIN_MS = 120;
-const ROLL_MAX_MS = 900;
+const ROLL_PER_UNIT_MS = 90;
+const ROLL_MIN_MS = 240;
+const ROLL_MAX_MS = 1800;
 
 function routeLength(layout: MachineLayout, route: number[]): number {
   let total = 0;
