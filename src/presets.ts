@@ -14,16 +14,8 @@ export interface Preset {
 
 export const PRESETS: readonly Preset[] = [
   {
-    id: 'first-ride',
-    number: 1,
-    ...copy.presets.firstRide,
-    pattern: 'c(a|o)t',
-    flags: '',
-    input: 'the cot',
-  },
-  {
     id: 'greedy',
-    number: 2,
+    number: 1,
     ...copy.presets.greedy,
     variant: 'greedy',
     pattern: '<.+>',
@@ -32,12 +24,20 @@ export const PRESETS: readonly Preset[] = [
   },
   {
     id: 'lazy',
-    number: 2,
+    number: 1,
     ...copy.presets.lazy,
     variant: 'lazy',
     pattern: '<.+?>',
     flags: '',
     input: '<b>bold</b>',
+  },
+  {
+    id: 'first-ride',
+    number: 2,
+    ...copy.presets.firstRide,
+    pattern: 'c(a|o)t',
+    flags: '',
+    input: 'the cot',
   },
   {
     id: 'optional-letter',

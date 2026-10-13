@@ -14,7 +14,7 @@ function run(pattern: string, flags: string, input: string) {
 
 describe('trace log (M8)', () => {
   it('describes the first ride with plain sentences', () => {
-    const preset = PRESETS[0];
+    const preset = PRESETS.find((p) => p.id === 'first-ride')!;
     const { program, trace } = run(preset.pattern, preset.flags, preset.input);
     expect(trace.length).toBeGreaterThan(0);
     const firstAttempt = trace.t.indexOf(T.attempt);
@@ -34,7 +34,7 @@ describe('trace log (M8)', () => {
   });
 
   it('describes backtracking through a diverter', () => {
-    const preset = PRESETS[0];
+    const preset = PRESETS.find((p) => p.id === 'first-ride')!;
     const { program, trace } = run(preset.pattern, preset.flags, preset.input);
     const backAt = trace.t.indexOf(T.backtrack);
     expect(backAt).toBeGreaterThan(-1);
@@ -83,7 +83,7 @@ describe('trace log (M8)', () => {
   });
 
   it('formatLog numbers the steps and caps very long logs', () => {
-    const preset = PRESETS[0];
+    const preset = PRESETS.find((p) => p.id === 'first-ride')!;
     const { program, trace } = run(preset.pattern, preset.flags, preset.input);
     const text = formatLog(program, preset.input, trace);
     const lines = text.split('\n');

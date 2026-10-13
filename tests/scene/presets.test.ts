@@ -4,9 +4,9 @@ import { parsePattern, PATTERN_MAX, STRING_MAX } from '../../src/engine/parse.ts
 import { DEFAULT_PRESET, PRESETS } from '../../src/presets.ts';
 
 const expectedOptions = [
-  ['first-ride', 1, 'c(a|o)t', 'the cot'],
-  ['greedy', 2, '<.+>', '<b>bold</b>'],
-  ['lazy', 2, '<.+?>', '<b>bold</b>'],
+  ['greedy', 1, '<.+>', '<b>bold</b>'],
+  ['lazy', 1, '<.+?>', '<b>bold</b>'],
+  ['first-ride', 2, 'c(a|o)t', 'the cot'],
   ['optional-letter', 3, 'colou?r', 'my color'],
   ['backreference', 4, String.raw`(\w)\1`, 'hello'],
   ['lookahead-password', 5, String.raw`^(?=.*\d)(?=.*[a-z]).{8,}$`, 'hunter22x'],
@@ -47,20 +47,20 @@ describe('workshop presets', () => {
     }
   });
 
-  it('defaults to the first ride with no flags', () => {
+  it('defaults to the greedy loop ride with no flags', () => {
     expect(DEFAULT_PRESET).toBe(PRESETS[0]);
     expect(DEFAULT_PRESET).toMatchObject({
-      id: 'first-ride',
-      pattern: 'c(a|o)t',
+      id: 'greedy',
+      pattern: '<.+>',
       flags: '',
-      input: 'the cot',
-      label: copy.presets.firstRide.label,
-      caption: copy.presets.firstRide.caption,
+      input: '<b>bold</b>',
+      label: copy.presets.greedy.label,
+      caption: copy.presets.greedy.caption,
     });
   });
 
   it('gives greedy and lazy variants distinct captions and loop preferences', () => {
-    const variants = PRESETS.filter((preset) => preset.number === 2);
+    const variants = PRESETS.filter((preset) => preset.number === 1);
     expect(variants.map((preset) => preset.variant)).toEqual(['greedy', 'lazy']);
     expect(variants[0].caption).not.toBe(variants[1].caption);
     expect(
