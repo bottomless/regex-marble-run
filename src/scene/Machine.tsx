@@ -30,6 +30,53 @@ import Flood from './Flood.tsx';
 import type { FloodModel } from '../playback/flood.ts';
 import type { FlagEntry } from '../playback/state.ts';
 
+function letterGlyph(glyph: string) {
+  return glyph === ' ' ? '·' : glyph === '\n' ? '↵' : glyph === '\t' ? '⇥' : glyph;
+}
+
+export function LetterMarble({
+  glyph,
+  index,
+  radius,
+  pitch,
+  materials,
+  tone,
+}: {
+  glyph: string;
+  index: number;
+  radius: number;
+  pitch: number;
+  materials: Materials;
+  tone: 'pending' | 'consumed' | 'head' | 'match';
+}) {
+  const ring =
+    tone === 'match'
+      ? materials.brass
+      : tone === 'head'
+        ? materials.tracks.vermilion
+        : materials.tracks.cobalt;
+  return (
+    <group>
+      <mesh castShadow material={materials.marble}>
+        <sphereGeometry args={[radius, 24, 24]} />
+      </mesh>
+      {tone !== 'pending' && (
+        <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, -radius + 0.015, 0]} material={ring}>
+          <torusGeometry args={[radius * 0.78, 0.016, 8, 24]} />
+        </mesh>
+      )}
+      <Glyph
+        text={letterGlyph(glyph)}
+        position={[0, 0.02, radius + 0.012]}
+        size={radius * 1.35}
+        width={Math.max(0.16, pitch - 0.08)}
+        color="#30362d"
+      />
+      <Glyph text={String(index)} position={[0, -radius - 0.05, radius]} size={0.07} color="#82745e" />
+    </group>
+  );
+}
+
 function LiveTileRail({
   input,
   unicode,
@@ -49,6 +96,7 @@ function LiveTileRail({
   const count = Math.min(24, Math.floor((metrics.boardWidth - 1) / 0.4));
   const tiles = visibleTiles(input, unicode, count);
   const pitch = Math.min(0.62, (metrics.boardWidth - 1) / Math.max(1, tiles.length));
+  const radius = Math.min(0.17, Math.max(0.1, pitch * 0.36));
   const front = metrics.boardDepth / 2 - 0.27;
   const ghosts = useMemo(() => new Set(scoutTiles(scoutWindow(machineState))), [machineState]);
   const brackets = useMemo(() => captureBrackets(program, machineState), [program, machineState]);
@@ -70,27 +118,15 @@ function LiveTileRail({
         const isHead = status === 'head';
         const gold = span !== null && tile.index >= span.start && tile.index < span.end;
         return (
-          <group
-            key={tile.index}
-            position={[(i - (tiles.length - 1) / 2) * pitch, 0.73, front]}
-          >
-            <RoundedBox
-              args={[pitch - 0.04, 0.32, 0.44]}
-              radius={0.03}
-              smoothness={2}
-              material={gold ? materials.brass : lit ? materials.tracks.cobalt : materials.tracks.birch}
-              castShadow
+          <group key={tile.index} position={[(i - (tiles.length - 1) / 2) * pitch, 0.6 + radius, front]}>
+            <LetterMarble
+              glyph={tile.glyph}
+              index={tile.index}
+              radius={radius}
+              pitch={pitch}
+              materials={materials}
+              tone={gold ? 'match' : isHead ? 'head' : lit ? 'consumed' : 'pending'}
             />
-            <Glyph
-              text={
-                tile.glyph === ' ' ? '·' : tile.glyph === '\n' ? '↵' : tile.glyph === '\t' ? '⇥' : tile.glyph
-              }
-              position={[0, 0.03, 0.23]}
-              size={0.27}
-              width={pitch - 0.06}
-              color={gold ? '#34372f' : lit ? '#f4efe2' : '#30362d'}
-            />
-            <Glyph text={String(tile.index)} position={[0, -0.145, 0.235]} size={0.07} color="#82745e" />
             {isHead && (
               <group position={[0, 0.2, 0.08]}>
                 <mesh position={[0, 0.26, 0]} material={materials.brass} castShadow>
@@ -99,7 +135,11 @@ function LiveTileRail({
                 <mesh position={[0.14, 0.42, 0]} material={materials.tracks.vermilion} castShadow>
                   <boxGeometry args={[0.28, 0.16, 0.03]} />
                 </mesh>
-                <mesh position={[0, 0.06, 0]} rotation={[0, 0, Math.PI]} material={materials.tracks.vermilion}>
+                <mesh
+                  position={[0, 0.06, 0]}
+                  rotation={[0, 0, Math.PI]}
+                  material={materials.tracks.vermilion}
+                >
                   <coneGeometry args={[0.1, 0.14, 4]} />
                 </mesh>
               </group>
@@ -164,6 +204,7 @@ function TileRail({
   const count = Math.min(24, Math.floor((metrics.boardWidth - 1) / 0.4));
   const tiles = visibleTiles(input, unicode, count);
   const pitch = Math.min(0.62, (metrics.boardWidth - 1) / Math.max(1, tiles.length));
+  const radius = Math.min(0.17, Math.max(0.1, pitch * 0.36));
   const front = metrics.boardDepth / 2 - 0.27;
   if (store) {
     return (
@@ -183,23 +224,15 @@ function TileRail({
         <boxGeometry args={[Math.max(1.2, tiles.length * pitch + 0.16), 0.06, 0.54]} />
       </mesh>
       {tiles.map((tile, i) => (
-        <group key={tile.index} position={[(i - (tiles.length - 1) / 2) * pitch, 0.73, front]}>
-          <RoundedBox
-            args={[pitch - 0.04, 0.32, 0.44]}
-            radius={0.03}
-            smoothness={2}
-            material={materials.tracks.birch}
-            castShadow
+        <group key={tile.index} position={[(i - (tiles.length - 1) / 2) * pitch, 0.6 + radius, front]}>
+          <LetterMarble
+            glyph={tile.glyph}
+            index={tile.index}
+            radius={radius}
+            pitch={pitch}
+            materials={materials}
+            tone="pending"
           />
-          <Glyph
-            text={
-              tile.glyph === ' ' ? '·' : tile.glyph === '\n' ? '↵' : tile.glyph === '\t' ? '⇥' : tile.glyph
-            }
-            position={[0, 0.03, 0.23]}
-            size={0.27}
-            width={pitch - 0.06}
-          />
-          <Glyph text={String(tile.index)} position={[0, -0.145, 0.235]} size={0.07} color="#82745e" />
         </group>
       ))}
       {input.length > (tiles.at(-1)?.index ?? 0) + (tiles.at(-1)?.glyph.length ?? 0) && (
@@ -209,7 +242,15 @@ function TileRail({
   );
 }
 
-export function Base({ metrics, materials, label = copy.scene.base }: { metrics: DisplayMetrics; materials: Materials; label?: string }) {
+export function Base({
+  metrics,
+  materials,
+  label = copy.scene.base,
+}: {
+  metrics: DisplayMetrics;
+  materials: Materials;
+  label?: string;
+}) {
   const { boardWidth: w, boardDepth: d, height: h } = metrics;
   return (
     <group>
