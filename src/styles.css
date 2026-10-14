@@ -630,8 +630,8 @@ summary:hover {
   inset: 0;
 }
 
-.scene-viewport > div {
-  position: absolute;
+.scene-viewport > div:not(.machine-parts) {
+  position: absolute !important;
   inset: 0;
 }
 
@@ -1708,7 +1708,7 @@ summary:hover {
   .scene-viewport {
     position: relative;
     flex: 1;
-    min-height: 250px;
+    min-height: 300px;
   }
 
   .hud {
@@ -1716,33 +1716,61 @@ summary:hover {
     width: 100%;
     max-height: none;
     overflow: visible;
+    border-radius: 14px;
   }
 
   .hud-card {
-    padding: 10px 14px;
+    padding: 7px 14px;
   }
 
   .hud dl {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 6px 12px;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 14px;
   }
 
   .hud-item {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1px;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 5px;
   }
 
   .hud-item[data-field='attempts'],
-  .hud-item[data-field='flags'] {
+  .hud-item[data-field='flags'],
+  .hud-item[data-field='native'],
+  .hud-help,
+  .motion-status {
     display: none;
   }
 
   .hud-item--result {
-    grid-column: 1 / -1;
-    margin-top: 2px;
-    padding-top: 6px;
+    flex-direction: row;
+    align-items: center;
+    margin-top: 0;
+    margin-left: auto;
+    padding-top: 0;
+    border-top: 0;
+    min-width: 0;
+  }
+
+  .hud-item--result dd {
+    flex-wrap: nowrap;
+    width: auto;
+    min-width: 0;
+    font-size: 12px;
+  }
+
+  .hud-summary-match {
+    max-width: 120px;
+  }
+
+  .hud-groups {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    margin-top: 4px;
   }
 
   .playback-dock {

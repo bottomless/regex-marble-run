@@ -21,6 +21,12 @@ async function expectMobileLayout(page: Page) {
       ).toBeLessThanOrEqual(box!.y);
     }
   }
+  const viewportBox = (await page.locator('.scene-viewport').boundingBox())!;
+  const canvasBox = boxes[2]!;
+  expect(viewportBox).not.toBeNull();
+  expect(canvasBox.height).toBeGreaterThanOrEqual(250);
+  expect(Math.abs(canvasBox.height - viewportBox.height)).toBeLessThanOrEqual(2);
+  expect(Math.abs(canvasBox.width - viewportBox.width)).toBeLessThanOrEqual(2);
   const dock = boxes[boxes.length - 1]!;
   for (const selector of ['.transport-group', '.transport-scrubber', '.transport-speeds']) {
     const box = (await page.locator(selector).boundingBox())!;

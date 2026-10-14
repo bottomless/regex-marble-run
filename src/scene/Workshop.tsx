@@ -266,6 +266,7 @@ function BuildWorkshop(props: WorkshopProps) {
       <div className="scene-viewport">
         <SceneBoundary fallback={fallback}>
           <Canvas
+            style={{ position: 'absolute', inset: 0 }}
             shadows="percentage"
             dpr={[1, 1.5]}
             frameloop="demand"

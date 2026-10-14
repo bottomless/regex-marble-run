@@ -72,7 +72,7 @@ export function Camera({ metrics, resetKey, reducedMotion }: CameraProps) {
       2 * Math.atan(Math.tan(MathUtils.degToRad(fullFov) / 2) * (usableHeight / height)),
     );
     const pose = cameraPose(metrics, width / usableHeight, fitFov);
-    pose.position.sub(pose.target).multiplyScalar(1.06).add(pose.target);
+    pose.position.sub(pose.target).multiplyScalar(compact ? 1.02 : 1.06).add(pose.target);
     updateImmediately(controls, () => {
       camera.aspect = width / height;
       if (topInset || bottomInset) {
