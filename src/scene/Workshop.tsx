@@ -298,7 +298,6 @@ function BuildWorkshop(props: WorkshopProps) {
               ))}
           </details>
         )}
-        <p className="orbit-hint">{copy.orbitPointer}</p>
       </div>
       <Hud
         store={playback.store}

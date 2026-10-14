@@ -63,11 +63,23 @@ export function Camera({ metrics, resetKey, reducedMotion }: CameraProps) {
     const controls = controlsRef.current;
     if (!controls || !(camera instanceof PerspectiveCamera) || width < 1 || height < 1) return;
 
-    const pose = cameraPose(metrics, width / height, camera.getEffectiveFOV());
-    pose.position.sub(pose.target).multiplyScalar(1.12).add(pose.target);
+    const compact = width <= 760;
+    const topInset = compact ? 0 : 108;
+    const bottomInset = compact ? 0 : 68;
+    const usableHeight = Math.max(1, height - topInset - bottomInset);
+    const fullFov = camera.getEffectiveFOV();
+    const fitFov = MathUtils.radToDeg(
+      2 * Math.atan(Math.tan(MathUtils.degToRad(fullFov) / 2) * (usableHeight / height)),
+    );
+    const pose = cameraPose(metrics, width / usableHeight, fitFov);
+    pose.position.sub(pose.target).multiplyScalar(1.06).add(pose.target);
     updateImmediately(controls, () => {
       camera.aspect = width / height;
-      camera.clearViewOffset();
+      if (topInset || bottomInset) {
+        camera.setViewOffset(width, height, 0, (bottomInset - topInset) / 2, width, height);
+      } else {
+        camera.clearViewOffset();
+      }
       camera.near = Math.max(0.01, pose.distance / 1000);
       camera.far = Math.max(100, pose.distance * 20);
       camera.up.set(0, 1, 0);

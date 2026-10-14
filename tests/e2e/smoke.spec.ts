@@ -71,10 +71,7 @@ test('playback, HUD, highlighting, trace log drawer and info sheets in the WebGL
   await expect(transport).toHaveAttribute('data-event-index', '0');
   for (const label of Object.values(copy.hud.labels))
     await expect(hud.locator('dt', { hasText: label })).toHaveCount(1);
-  const details = hud.locator('.hud-details');
-  await expect(details).toHaveJSProperty('open', false);
-  await expect(hud.locator('[data-field="native"]')).toBeHidden();
-  for (const field of ['result', 'steps', 'backtracks']) {
+  for (const field of ['result', 'steps', 'backtracks', 'attempts', 'flags', 'native']) {
     await expect(hud.locator(`[data-field="${field}"]`)).toBeVisible();
   }
 
@@ -107,14 +104,7 @@ test('playback, HUD, highlighting, trace log drawer and info sheets in the WebGL
   await expect(hud.locator('.hud-summary-match')).toHaveText(matched);
   await expect(canvas).toHaveAttribute('data-captures', JSON.stringify(captureSpans(final)));
   await expect(canvas).toHaveAttribute('data-match', JSON.stringify(matchSpan(final)));
-  await details.locator('summary').focus();
-  await details.locator('summary').press('Enter');
-  await expect(details).toHaveJSProperty('open', true);
   await expect(hud.locator('[data-field="native"]')).toBeVisible();
-  await expect(hud.locator('.hud-match-text')).toHaveText(matched);
-  await details.locator('summary').press('Space');
-  await expect(details).toHaveJSProperty('open', false);
-  await expect(hud.locator('[data-field="native"]')).toBeHidden();
   await expect(hud.locator('.hud-summary-match')).toBeVisible();
 
   // Pattern hover highlighting
@@ -275,15 +265,13 @@ test('native pattern flags expose six supported modes and keep Unicode modes mut
   expect(errors).toEqual([]);
 });
 
-test('desktop grid separates the editor, canvas, HUD and playback without horizontal overflow', async ({
+test('desktop layout places Pattern and String at top-center over the full-screen canvas without overlap or overflow', async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
   await expect(page.locator('canvas')).toHaveAttribute('data-pattern', PRESETS[0].pattern);
-  await expect(page.locator('.control-island')).toHaveAttribute('data-expanded', 'true');
   await expect(page.locator('#control-fields')).toBeVisible();
-  await expect(page.getByTestId('hud').locator('.hud-details')).toHaveJSProperty('open', false);
 
   for (const viewport of [
     { width: 1440, height: 900 },
@@ -291,6 +279,7 @@ test('desktop grid separates the editor, canvas, HUD and playback without horizo
   ]) {
     await page.setViewportSize(viewport);
     const patternEditor = page.locator('.pattern-editor');
+    const stringEditor = page.locator('.string-editor');
     const options = patternEditor.locator('details.pattern-options');
     const summary = options.locator(':scope > summary');
     await expect(options).toHaveCount(1);
@@ -300,6 +289,7 @@ test('desktop grid separates the editor, canvas, HUD and playback without horizo
       if (expanded) await summary.click();
       await expect(options).toHaveJSProperty('open', expanded);
       const row = (await patternEditor.boundingBox())!;
+      const stringBox = (await stringEditor.boundingBox())!;
       const pattern = (await patternEditor.locator('#pattern').boundingBox())!;
       const flags = (await summary.boundingBox())!;
       for (const box of [pattern, flags]) {
@@ -312,6 +302,7 @@ test('desktop grid separates the editor, canvas, HUD and playback without horizo
       }
       expect(Math.abs(pattern.y + pattern.height / 2 - (flags.y + flags.height / 2))).toBeLessThanOrEqual(1);
       expect(pattern.x + pattern.width).toBeLessThanOrEqual(flags.x);
+      expect(row.y + row.height).toBeLessThanOrEqual(stringBox.y);
       const panel = options.locator('.flag-panel');
       if (expanded) {
         await expect(panel).toBeVisible();
@@ -330,10 +321,11 @@ test('desktop grid separates the editor, canvas, HUD and playback without horizo
       const selectors = [
         '.brand-header',
         '.control-island',
-        '.workshop-stage',
         'canvas',
         '.hud',
+        '.tool-rail',
         '.playback-dock',
+        '.workshop-footer',
       ];
       const boxes = await Promise.all(selectors.map((selector) => page.locator(selector).boundingBox()));
       for (const [index, box] of boxes.entries()) {
@@ -343,16 +335,14 @@ test('desktop grid separates the editor, canvas, HUD and playback without horizo
         expect(box!.x, selectors[index]).toBeGreaterThanOrEqual(0);
         expect(box!.x + box!.width, selectors[index]).toBeLessThanOrEqual(viewport.width);
       }
-      const [header, editor, stage, canvas, hud, dock] = boxes.map((box) => box!);
-      expect(header.y + header.height).toBeLessThanOrEqual(editor.y);
-      expect(header.y + header.height).toBeLessThanOrEqual(stage.y);
-      expect(editor.x + editor.width).toBeLessThanOrEqual(stage.x);
-      for (const box of [canvas, hud, dock]) {
-        expect(box.x).toBeGreaterThanOrEqual(stage.x);
-        expect(box.x + box.width).toBeLessThanOrEqual(stage.x + stage.width);
-      }
-      expect(canvas.y + canvas.height).toBeLessThanOrEqual(hud.y);
-      expect(hud.y + hud.height).toBeLessThanOrEqual(dock.y);
+      const [header, editor, canvas, hud, share, dock, footer] = boxes.map((box) => box!);
+      expect(canvas.width).toBe(viewport.width);
+      expect(canvas.height).toBe(viewport.height);
+      expect(header.x + header.width).toBeLessThanOrEqual(editor.x);
+      expect(editor.x + editor.width).toBeLessThanOrEqual(hud.x);
+      expect(share.x + share.width).toBeLessThanOrEqual(dock.x);
+      expect(dock.x + dock.width).toBeLessThanOrEqual(footer.x);
+      expect(hud.y + hud.height).toBeLessThanOrEqual(footer.y);
       for (const selector of ['.transport-group', '.transport-scrubber', '.transport-speeds']) {
         const box = (await page.locator(selector).boundingBox())!;
         expect(box, selector).not.toBeNull();
@@ -379,7 +369,7 @@ test('desktop grid separates the editor, canvas, HUD and playback without horizo
   }
 });
 
-test('capture details stay inside a short viewport', async ({ page }) => {
+test('capture groups stay inside a short viewport', async ({ page }) => {
   await page.setViewportSize({ width: 800, height: 600 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto(
@@ -389,14 +379,11 @@ test('capture details stay inside a short viewport', async ({ page }) => {
   await page.getByRole('combobox', { name: copy.transport.speed }).selectOption(String(INSTANT));
   const hud = page.getByTestId('hud');
   await expect(hud).toHaveAttribute('data-result', 'match');
-  await hud.locator('.hud-details > summary').click();
-  const panel = hud.locator('.hud-detail-panel');
-  await expect(panel).toBeVisible();
   await expect(hud.locator('.hud-groups li')).toHaveCount(8);
   for (const height of [600, 560]) {
     await page.setViewportSize({ width: 800, height });
-    await expect.poll(async () => (await panel.boundingBox())!.y).toBeGreaterThanOrEqual(0);
-    const box = (await panel.boundingBox())!;
+    const box = (await hud.boundingBox())!;
+    expect(box.y).toBeGreaterThanOrEqual(0);
     expect(box.y + box.height).toBeLessThanOrEqual(height);
     await expect(hud.locator('[data-field="attempts"]')).toBeInViewport();
   }

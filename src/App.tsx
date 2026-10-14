@@ -55,7 +55,6 @@ function WorkshopApp() {
   const [initial] = useState(initialShare);
   const [draft, setDraft] = useState({ pattern: initial.pattern, flags: initial.flags });
   const [input, setInput] = useState(initial.input);
-  const [expanded, setExpanded] = useState(() => !window.matchMedia('(max-width: 760px)').matches);
   const [resetKey, setResetKey] = useState(0);
   const [copied, setCopied] = useState<'idle' | 'done' | 'failed'>('idle');
   const [presetsOpen, setPresetsOpen] = useState(false);
@@ -159,89 +158,60 @@ function WorkshopApp() {
 
   return (
     <main id="app-root" className="workshop-shell" data-theme={dark ? 'dark' : 'light'}>
+      <section className="workshop-stage" aria-label={copy.machine} aria-busy={pending}>
+        {parsed.program ? (
+          <Suspense
+            fallback={
+              <p className="stage-message" role="status">
+                {copy.building}
+              </p>
+            }
+          >
+            <Workshop
+              program={parsed.program}
+              input={input}
+              dark={dark}
+              reducedMotion={reducedMotion}
+              resetKey={resetKey}
+              onHelp={() => setGuideOpen(true)}
+            />
+          </Suspense>
+        ) : (
+          <p className="stage-message">{copy.editToBuild}</p>
+        )}
+      </section>
+
       <header className="brand-header">
-        <div className="brand-line">
-          <svg className="brand-mark" viewBox="0 0 28 28" aria-hidden="true">
-            <path d="M7 5v7l14 7v5M7 12l-3 8" />
-            <circle cx="7" cy="5" r="3" />
-            <circle cx="21" cy="23" r="3" />
+        <h1>{copy.brand}</h1>
+        <button
+          type="button"
+          className="preset-open"
+          aria-label={copy.presetsLabel}
+          aria-expanded={presetsOpen}
+          data-current-preset={preset?.id}
+          onClick={() => setPresetsOpen(true)}
+        >
+          <svg className="preset-grid-icon" viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="5" cy="4.5" r="1.2" />
+            <circle cx="11" cy="4.5" r="1.2" />
+            <circle cx="5" cy="8" r="1.2" />
+            <circle cx="11" cy="8" r="1.2" />
+            <circle cx="5" cy="11.5" r="1.2" />
+            <circle cx="11" cy="11.5" r="1.2" />
           </svg>
-          <div>
-            <h1>{copy.brand}</h1>
-            <p className="descriptor">{copy.descriptor}</p>
-          </div>
-        </div>
-        <div className="header-actions">
-          <button type="button" className="guide-button" onClick={() => setGuideOpen(true)}>
-            <span className="guide-icon" aria-hidden="true">
-              ?
-            </span>
-            {copy.guide}
-          </button>
-          <div className="share-row">
-            <button type="button" className="copy-link" onClick={() => void copyLink()} data-copied={copied}>
-              <svg viewBox="0 0 20 20" aria-hidden="true">
-                <path d="M8.5 11.5a3 3 0 0 0 4.2 0l3-3a3 3 0 0 0-4.2-4.2l-1 1" />
-                <path d="M11.5 8.5a3 3 0 0 0-4.2 0l-3 3a3 3 0 0 0 4.2 4.2l1-1" />
-              </svg>
-              {copy.share.copyLink}
-            </button>
-            <span className="share-status" role="status" aria-live="polite">
-              {copied === 'done' ? copy.share.copied : copied === 'failed' ? copy.share.failed : ''}
-            </span>
-          </div>
-        </div>
+          <span>{copy.presetsLabel}</span>
+          <svg className="preset-chevron" viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M6 8l4 4 4-4" />
+          </svg>
+        </button>
       </header>
 
-      <section className="control-island" aria-label={copy.controls} data-expanded={expanded}>
-        <div className="editor-heading">
-          <h2>{copy.editorTitle}</h2>
-          <button
-            type="button"
-            className="controls-toggle"
-            aria-expanded={expanded}
-            aria-controls="control-fields"
-            onClick={() => setExpanded((value) => !value)}
-          >
-            {expanded ? copy.collapseControls : copy.expandControls}
-            <span aria-hidden="true">{expanded ? '−' : '+'}</span>
-          </button>
-        </div>
-        <div className="collapsed-preview">
-          <code>
-            {copy.syntax.slash}
-            {draft.pattern}
-            {copy.syntax.slash}
-            {draft.flags}
-          </code>
-          <span>{input || copy.emptyInput}</span>
-        </div>
+      <section className="control-island" aria-label={copy.controls}>
         <div id="control-fields" className="control-fields">
-          <p className="editor-hint">{copy.editorHint}</p>
-          <div className="preset-picker">
-            <span className="preset-picker-label" id="presets-label">
-              {copy.presetsLabel}
-            </span>
-            <button
-              type="button"
-              className="preset-open"
-              aria-labelledby="presets-label"
-              aria-expanded={presetsOpen}
-              data-current-preset={preset?.id}
-              onClick={() => setPresetsOpen(true)}
-            >
-              <span>{preset ? copy.presetOption(preset.number, preset.label) : copy.customPreset}</span>
-              <svg viewBox="0 0 20 20" aria-hidden="true">
-                <path d="M6 8l4 4 4-4" />
-              </svg>
-            </button>
-          </div>
-
           <div className="field-row field-row--pattern">
-            <div className="field-heading">
-              <label htmlFor="pattern">{copy.patternLabel}</label>
-              <span className="field-count">{copy.characterCount(draft.pattern.length, PATTERN_MAX)}</span>
-            </div>
+            <label htmlFor="pattern" className="sr-only">
+              {copy.patternLabel}
+            </label>
             <div className={`pattern-editor${error ? ' pattern-editor--invalid' : ''}`}>
               <PatternField
                 value={draft.pattern}
@@ -325,59 +295,60 @@ function WorkshopApp() {
           )}
 
           <div className="field-row field-row--input">
-            <div className="field-heading">
-              <label htmlFor="test-string">{copy.inputLabel}</label>
-              <span className="field-count">{copy.characterCount(input.length, STRING_MAX)}</span>
+            <div className="string-editor">
+              <label htmlFor="test-string" className="string-label">
+                <span aria-hidden="true">STRING</span>
+                <span className="sr-only">{copy.inputLabel}</span>
+              </label>
+              <textarea
+                id="test-string"
+                rows={1}
+                value={input}
+                maxLength={STRING_MAX}
+                spellCheck={false}
+                autoComplete="off"
+                autoCapitalize="off"
+                onChange={(event) => setInput(event.target.value.slice(0, STRING_MAX))}
+              />
             </div>
-            <textarea
-              id="test-string"
-              rows={1}
-              value={input}
-              maxLength={STRING_MAX}
-              spellCheck={false}
-              autoComplete="off"
-              autoCapitalize="off"
-              onChange={(event) => setInput(event.target.value.slice(0, STRING_MAX))}
-            />
           </div>
         </div>
-        <p className="editor-footnote">{copy.marbleHint}</p>
       </section>
 
-      <section className="workshop-stage" aria-label={copy.machine} aria-busy={pending}>
-        <div className="stage-toolbar">
-          <button
-            type="button"
-            className="reset-view"
-            aria-label={copy.resetView}
-            title={copy.resetView}
-            onClick={() => setResetKey((key) => key + 1)}
-          >
+      <section className="tool-rail" aria-label={copy.toolsLabel}>
+        <div className="share-row">
+          <button type="button" className="copy-link" onClick={() => void copyLink()} data-copied={copied}>
             <svg viewBox="0 0 20 20" aria-hidden="true">
-              <path d="M4 7a6 6 0 1 1 0 7M4 2v5h5" />
+              <path d="M8.5 11.5a3 3 0 0 0 4.2 0l3-3a3 3 0 0 0-4.2-4.2l-1 1" />
+              <path d="M11.5 8.5a3 3 0 0 0-4.2 0l-3 3a3 3 0 0 0 4.2 4.2l1-1" />
             </svg>
+            {copy.share.copyLink}
           </button>
+          <span className="share-status" role="status" aria-live="polite">
+            {copied === 'done' ? copy.share.copied : copied === 'failed' ? copy.share.failed : ''}
+          </span>
         </div>
-        {parsed.program ? (
-          <Suspense
-            fallback={
-              <p className="stage-message" role="status">
-                {copy.building}
-              </p>
-            }
-          >
-            <Workshop
-              program={parsed.program}
-              input={input}
-              dark={dark}
-              reducedMotion={reducedMotion}
-              resetKey={resetKey}
-            />
-          </Suspense>
-        ) : (
-          <p className="stage-message">{copy.editToBuild}</p>
-        )}
       </section>
+
+      <footer className="workshop-footer">
+        <button type="button" className="guide-button" onClick={() => setGuideOpen(true)}>
+          <span className="guide-icon" aria-hidden="true">
+            ?
+          </span>
+          {copy.guide}
+        </button>
+        <button
+          type="button"
+          className="reset-view"
+          aria-label={copy.resetView}
+          title={copy.resetView}
+          onClick={() => setResetKey((key) => key + 1)}
+        >
+          <svg viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M4 7a6 6 0 1 1 0 7M4 2v5h5" />
+          </svg>
+        </button>
+      </footer>
       {presetsOpen && (
         <PresetSheet current={preset} onSelect={selectPreset} onClose={() => setPresetsOpen(false)} />
       )}
