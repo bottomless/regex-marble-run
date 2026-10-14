@@ -35,7 +35,7 @@ export const copy = {
   guide: 'Guide',
   editorTitle: 'Your expression',
   editorHint: 'Edit below. The machine updates as you type.',
-  aboutExample: 'About this example',
+  flagsPlaceholder: 'Flags',
   noFlags: 'None',
   emptyInput: 'Empty string',
   marbleHint: 'Each marble is a match attempt. Gates test characters; loops try them again.',

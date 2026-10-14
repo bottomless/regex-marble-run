@@ -35,6 +35,37 @@ async function expectMobileLayout(page: Page) {
     expect(box.y, selector).toBeGreaterThanOrEqual(dock.y);
     expect(box.y + box.height, selector).toBeLessThanOrEqual(dock.y + dock.height);
   }
+  const patternEditor = page.locator('.pattern-editor');
+  const patternInput = patternEditor.locator('#pattern');
+  if (await patternInput.isVisible()) {
+    const options = patternEditor.locator('details.pattern-options');
+    await expect(options).toHaveCount(1);
+    const row = (await patternEditor.boundingBox())!;
+    const pattern = (await patternInput.boundingBox())!;
+    const flags = (await options.locator(':scope > summary').boundingBox())!;
+    expect(row.x).toBeGreaterThanOrEqual(0);
+    expect(row.x + row.width).toBeLessThanOrEqual(width);
+    for (const box of [pattern, flags]) {
+      expect(box.width).toBeGreaterThan(0);
+      expect(box.height).toBeGreaterThan(0);
+      expect(box.x).toBeGreaterThanOrEqual(row.x);
+      expect(box.x + box.width).toBeLessThanOrEqual(row.x + row.width);
+      expect(box.y).toBeGreaterThanOrEqual(row.y);
+      expect(box.y + box.height).toBeLessThanOrEqual(row.y + row.height);
+    }
+    expect(Math.abs(pattern.y + pattern.height / 2 - (flags.y + flags.height / 2))).toBeLessThanOrEqual(1);
+    expect(pattern.x + pattern.width).toBeLessThanOrEqual(flags.x);
+    const panel = options.locator('.flag-panel');
+    if (await panel.isVisible()) {
+      const menu = (await panel.boundingBox())!;
+      const input = (await page.locator('#test-string').boundingBox())!;
+      expect(menu.x).toBeGreaterThanOrEqual(0);
+      expect(menu.x + menu.width).toBeLessThanOrEqual(width);
+      expect(menu.y).toBeGreaterThanOrEqual(row.y + row.height);
+      expect(Math.max(menu.x, input.x)).toBeLessThan(Math.min(menu.x + menu.width, input.x + input.width));
+      expect(Math.max(menu.y, input.y)).toBeLessThan(Math.min(menu.y + menu.height, input.y + input.height));
+    }
+  }
   expect(
     await page.evaluate(
       () =>
@@ -103,7 +134,7 @@ for (const width of [390, 320]) {
     expect(errors).toEqual([]);
   });
 
-  test(`short ${width}px phone allows editing and disclosures without overlapping the machine or overflowing`, async ({
+  test(`short ${width}px phone keeps editing and the flag popup usable without horizontal overflow`, async ({
     page,
   }) => {
     const errors: string[] = [];
@@ -114,8 +145,15 @@ for (const width of [390, 320]) {
     const editor = page.locator('.control-island');
     const expand = editor.getByRole('button', { name: copy.expandControls, exact: true });
     const done = editor.getByRole('button', { name: copy.collapseControls, exact: true });
-    const options = editor.locator('.editor-options');
-    const note = editor.locator('.preset-note');
+    const options = editor.locator('.pattern-editor details.pattern-options');
+    const summary = options.locator(':scope > summary');
+    const panel = options.locator('.flag-panel');
+    const supported = ['i', 'm', 's', 'u', 'v', 'y'] as const;
+    const flagButton = (flag: (typeof supported)[number]) =>
+      panel.getByRole('button', { name: copy.flagLabel(flag, copy.flags[flag]), exact: true });
+    await expect(options).toHaveCount(1);
+    await expect(page.locator('.editor-options, .preset-note, .pattern-flags')).toHaveCount(0);
+    await expect(page.getByText('About this example', { exact: true })).toHaveCount(0);
     await expect(page.locator('canvas')).toHaveAttribute('data-pattern', PRESETS[0].pattern);
     await expect(editor).toHaveAttribute('data-expanded', 'false');
     await expect(editor.locator('#pattern')).toBeHidden();
@@ -128,27 +166,58 @@ for (const width of [390, 320]) {
     await expect(editor.locator('#control-fields')).toBeVisible();
     await expect(editor.locator('.collapsed-preview')).toBeHidden();
     await expect(options).toHaveJSProperty('open', false);
-    await expect(note).toHaveJSProperty('open', false);
-    await expect(options.locator('.flag-controls')).toBeHidden();
-    await expect(note.locator('p')).toBeHidden();
+    await expect(summary.locator('.active-flags')).toHaveText(copy.flagsPlaceholder);
+    await expect(summary).toHaveAttribute('aria-label', `${copy.flagsLabel}: ${copy.noFlags}`);
+    await expect(panel).toBeHidden();
     await expectMobileLayout(page);
-    await options.locator('summary').scrollIntoViewIfNeeded();
-    await options.locator('summary').click();
+    await summary.scrollIntoViewIfNeeded();
+    await summary.click();
     await expect(options).toHaveJSProperty('open', true);
-    await expect(options.getByRole('button')).toHaveCount(6);
-    await note.locator('summary').scrollIntoViewIfNeeded();
-    await note.locator('summary').click();
-    await expect(note).toHaveJSProperty('open', true);
-    await expect(note.locator('p')).toBeVisible();
-    await expect(note.locator('p')).toHaveText(PRESETS[0].caption);
+    await expect(panel).toBeVisible();
+    await expect(panel.locator('.flag-controls button.flag-chip')).toHaveCount(supported.length);
+    await expect(panel.getByRole('button')).toHaveCount(supported.length);
+    for (const flag of supported) {
+      await expect(flagButton(flag)).toBeVisible();
+      await expect(flagButton(flag)).toHaveAttribute('aria-pressed', 'false');
+    }
     await expectMobileLayout(page);
-    await note.locator('summary').click();
-    await options.locator('summary').scrollIntoViewIfNeeded();
-    await options.locator('summary').click();
+    await flagButton('i').click();
+    await expect(flagButton('i')).toHaveAttribute('aria-pressed', 'true');
+    await expect(options).toHaveJSProperty('open', true);
+    await expect(summary.locator('.active-flags')).toHaveText('i');
+    await expect(summary).toHaveAttribute('aria-label', `${copy.flagsLabel}: i`);
+    await expectMobileLayout(page);
+    await summary.click();
     await expect(options).toHaveJSProperty('open', false);
-    await expect(note).toHaveJSProperty('open', false);
-    await expect(options.locator('.flag-controls')).toBeHidden();
-    await expect(note.locator('p')).toBeHidden();
+    await expect(panel).toBeHidden();
+    await expect(summary.locator('.active-flags')).toHaveText('i');
+    await expectMobileLayout(page);
+    await summary.click();
+    await expect(options).toHaveJSProperty('open', true);
+    await expect(flagButton('i')).toHaveAttribute('aria-pressed', 'true');
+    await flagButton('i').press('Escape');
+    await expect(options).toHaveJSProperty('open', false);
+    await expect(panel).toBeHidden();
+    await expect(summary).toBeFocused();
+    await summary.press('Enter');
+    await expect(options).toHaveJSProperty('open', true);
+    await flagButton('y').focus();
+    await page.keyboard.press('Tab');
+    await expect(editor.locator('#test-string')).toBeFocused();
+    await expect(options).toHaveJSProperty('open', false);
+    await expect(panel).toBeHidden();
+    await summary.click();
+    await expect(options).toHaveJSProperty('open', true);
+    await editor.locator('#pattern').click();
+    await expect(options).toHaveJSProperty('open', false);
+    await expect(panel).toBeHidden();
+    await summary.click();
+    await expect(options).toHaveJSProperty('open', true);
+    await editor.locator('#test-string').dispatchEvent('pointerdown');
+    await expect(options).toHaveJSProperty('open', false);
+    await expect(panel).toBeHidden();
+    await editor.locator('#test-string').click();
+    await expect(editor.locator('#test-string')).toBeFocused();
 
     const pattern = 'a+';
     const input = 'a'.repeat(80);
@@ -164,13 +233,20 @@ for (const width of [390, 320]) {
     await expect(expand).toHaveAttribute('aria-expanded', 'false');
     await expect(editor.locator('#control-fields')).toBeHidden();
     await expect(editor.locator('.collapsed-preview code')).toHaveText(
-      `${copy.syntax.slash}${pattern}${copy.syntax.slash}`,
+      `${copy.syntax.slash}${pattern}${copy.syntax.slash}i`,
     );
     await expect(editor.locator('.collapsed-preview > span')).toHaveText(input);
     await expectMobileLayout(page);
     await expand.click();
     await expect(editor.locator('#pattern')).toHaveValue(pattern);
     await expect(editor.locator('#test-string')).toHaveValue(input);
+    await expect(summary.locator('.active-flags')).toHaveText('i');
+    await expect(options).toHaveJSProperty('open', false);
+    await summary.click();
+    await expect(flagButton('i')).toHaveAttribute('aria-pressed', 'true');
+    await flagButton('i').press('Escape');
+    await expect(options).toHaveJSProperty('open', false);
+    await expect(summary).toBeFocused();
     await done.click();
 
     const guideButton = page.getByRole('button', { name: copy.guide, exact: true });

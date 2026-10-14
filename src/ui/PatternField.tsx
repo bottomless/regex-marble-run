@@ -26,13 +26,11 @@ function charWidth(input: HTMLInputElement): number {
  */
 export default function PatternField({
   value,
-  flags,
   program,
   error,
   onChange,
 }: {
   value: string;
-  flags: string;
   program: Program | null;
   error: { message: string; index: number } | null;
   onChange: (event: ChangeEvent<HTMLInputElement>) => void;
@@ -68,7 +66,7 @@ export default function PatternField({
   }
 
   return (
-    <div className={`pattern-capsule${error ? ' pattern-capsule--invalid' : ''}`}>
+    <div className="pattern-capsule">
       <span className="pattern-delimiter" aria-hidden="true">
         {copy.syntax.slash}
       </span>
@@ -105,11 +103,6 @@ export default function PatternField({
       <span className="pattern-delimiter" aria-hidden="true">
         {copy.syntax.slash}
       </span>
-      {flags && (
-        <span className="pattern-flags" aria-hidden="true">
-          {flags}
-        </span>
-      )}
     </div>
   );
 }

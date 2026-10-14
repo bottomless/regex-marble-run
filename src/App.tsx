@@ -60,6 +60,7 @@ function WorkshopApp() {
   const [copied, setCopied] = useState<'idle' | 'done' | 'failed'>('idle');
   const [presetsOpen, setPresetsOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
+  const flagsRef = useRef<HTMLDetailsElement>(null);
   const dark = useMediaQuery('(prefers-color-scheme: dark)');
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
   const deferredDraft = useDeferredValue(draft);
@@ -112,6 +113,17 @@ function WorkshopApp() {
     const timer = window.setTimeout(() => setCopied('idle'), 2000);
     return () => window.clearTimeout(timer);
   }, [copied]);
+
+  useEffect(() => {
+    function closeFlags(event: PointerEvent) {
+      const details = flagsRef.current;
+      if (details && event.target instanceof Node && !details.contains(event.target)) {
+        details.open = false;
+      }
+    }
+    document.addEventListener('pointerdown', closeFlags);
+    return () => document.removeEventListener('pointerdown', closeFlags);
+  }, []);
 
   async function copyLink() {
     const url = shareUrl(share, window.location);
@@ -230,18 +242,63 @@ function WorkshopApp() {
               <label htmlFor="pattern">{copy.patternLabel}</label>
               <span className="field-count">{copy.characterCount(draft.pattern.length, PATTERN_MAX)}</span>
             </div>
-            <PatternField
-              value={draft.pattern}
-              flags={draft.flags}
-              program={parsed.program}
-              error={error}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  pattern: event.target.value.slice(0, PATTERN_MAX),
-                }))
-              }
-            />
+            <div className={`pattern-editor${error ? ' pattern-editor--invalid' : ''}`}>
+              <PatternField
+                value={draft.pattern}
+                program={parsed.program}
+                error={error}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    pattern: event.target.value.slice(0, PATTERN_MAX),
+                  }))
+                }
+              />
+              <details
+                ref={flagsRef}
+                className="pattern-options"
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    event.preventDefault();
+                    event.currentTarget.open = false;
+                    event.currentTarget.querySelector('summary')?.focus();
+                  }
+                }}
+                onBlur={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget)) event.currentTarget.open = false;
+                }}
+              >
+                <summary
+                  aria-label={`${copy.flagsLabel}: ${draft.flags || copy.noFlags}`}
+                  title={copy.flagsLabel}
+                >
+                  <span className="active-flags" data-active={Boolean(draft.flags)}>
+                    {draft.flags || copy.flagsPlaceholder}
+                  </span>
+                </summary>
+                <div className="flag-panel">
+                  <fieldset className="flag-controls" aria-describedby="unicode-hint">
+                    <legend className="sr-only">{copy.flagsLabel}</legend>
+                    {FLAG_OPTIONS.map((flag) => (
+                      <button
+                        type="button"
+                        key={flag}
+                        className="flag-chip"
+                        aria-pressed={draft.flags.includes(flag)}
+                        aria-label={copy.flagLabel(flag, copy.flags[flag])}
+                        onClick={() => toggleFlag(flag)}
+                      >
+                        <code>{flag}</code>
+                        <span>{copy.flags[flag]}</span>
+                      </button>
+                    ))}
+                  </fieldset>
+                  <p id="unicode-hint" className="options-hint">
+                    {copy.unicodeHint}
+                  </p>
+                </div>
+              </details>
+            </div>
             <p id="pattern-hint" className="sr-only">
               {copy.patternHint}
             </p>
@@ -279,44 +336,6 @@ function WorkshopApp() {
               onChange={(event) => setInput(event.target.value.slice(0, STRING_MAX))}
             />
           </div>
-
-          <details className="editor-options">
-            <summary>
-              {copy.flagsLabel}
-              <span className="active-flags">{draft.flags || copy.noFlags}</span>
-            </summary>
-            <fieldset className="flag-controls" aria-describedby="unicode-hint">
-              <legend className="sr-only">{copy.flagsLabel}</legend>
-              {FLAG_OPTIONS.map((flag) => (
-                <button
-                  type="button"
-                  key={flag}
-                  className="flag-chip"
-                  aria-pressed={draft.flags.includes(flag)}
-                  aria-label={copy.flagLabel(flag, copy.flags[flag])}
-                  title={copy.flags[flag]}
-                  onClick={() => toggleFlag(flag)}
-                >
-                  {flag}
-                </button>
-              ))}
-            </fieldset>
-            <p id="unicode-hint" className="options-hint">
-              {copy.unicodeHint}
-            </p>
-          </details>
-
-          {preset && (
-            <details className="preset-note">
-              <summary>{copy.aboutExample}</summary>
-              <p>{preset.caption}</p>
-              {preset.source && (
-                <a href={preset.source} target="_blank" rel="noopener noreferrer">
-                  {copy.source}
-                </a>
-              )}
-            </details>
-          )}
         </div>
         <p className="editor-footnote">{copy.marbleHint}</p>
       </section>

@@ -178,50 +178,46 @@ test('playback, HUD, highlighting, trace log drawer and info sheets in the WebGL
   expect(external).toEqual([]);
 });
 
-test('native editor disclosures expose six supported flags and keep Unicode modes mutually exclusive', async ({
+test('native pattern flags expose six supported modes and keep Unicode modes mutually exclusive', async ({
   page,
 }) => {
   const errors = collectErrors(page);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
   await openControls(page);
-  const options = page.locator('.editor-options');
-  const flagsSummary = page.locator('.editor-options > summary');
-  const note = page.locator('.preset-note');
-  const noteSummary = page.locator('.preset-note > summary');
+  const patternEditor = page.locator('.pattern-editor');
+  const options = patternEditor.locator('details.pattern-options');
+  const flagsSummary = options.locator(':scope > summary');
+  const panel = options.locator('.flag-panel');
   const supported = ['i', 'm', 's', 'u', 'v', 'y'] as const;
   const flagButton = (flag: (typeof supported)[number]) =>
-    options.getByRole('button', { name: copy.flagLabel(flag, copy.flags[flag]), exact: true });
+    panel.getByRole('button', { name: copy.flagLabel(flag, copy.flags[flag]), exact: true });
   const sharedFlags = () =>
     decodeShare(new URL(page.url()).hash, { pattern: '', flags: '', input: '', mode: 'single' })?.flags;
 
+  await expect(patternEditor.locator('#pattern')).toBeVisible();
+  await expect(options).toHaveCount(1);
+  await expect(page.locator('.editor-options, .preset-note, .pattern-flags')).toHaveCount(0);
+  await expect(page.getByText('About this example', { exact: true })).toHaveCount(0);
   await expect(options).toHaveJSProperty('open', false);
-  await expect(flagsSummary).toContainText(copy.flagsLabel);
-  await expect(flagsSummary.locator('.active-flags')).toHaveText(copy.noFlags);
-  await expect(options.locator('.flag-controls')).toBeHidden();
-  await expect(options.locator('.flag-chip')).toHaveCount(supported.length);
-  await expect(note).toHaveJSProperty('open', false);
-  await expect(noteSummary).toHaveText(copy.aboutExample);
-  await expect(note.locator('p')).toHaveText(PRESETS[0].caption);
-  await expect(note.locator('p')).toBeHidden();
-  await noteSummary.press('Enter');
-  await expect(note).toHaveJSProperty('open', true);
-  await expect(note.locator('p')).toBeVisible();
-  await noteSummary.press('Space');
-  await expect(note).toHaveJSProperty('open', false);
-  await expect(note.locator('p')).toBeHidden();
+  await expect(flagsSummary).toHaveAttribute('aria-label', `${copy.flagsLabel}: ${copy.noFlags}`);
+  await expect(flagsSummary.locator('.active-flags')).toHaveText(copy.flagsPlaceholder);
+  await expect(panel).toBeHidden();
+  await expect(panel.locator('.flag-controls button.flag-chip')).toHaveCount(supported.length);
 
   await flagsSummary.click();
   await expect(options).toHaveJSProperty('open', true);
-  await expect(options.getByRole('button')).toHaveCount(supported.length);
+  await expect(panel).toBeVisible();
+  await expect(panel.getByRole('button')).toHaveCount(supported.length);
   for (const flag of supported) {
     await expect(flagButton(flag)).toBeVisible();
     await expect(flagButton(flag)).toBeEnabled();
+    await expect(flagButton(flag)).toHaveAttribute('aria-label', copy.flagLabel(flag, copy.flags[flag]));
     await expect(flagButton(flag)).toHaveAttribute('aria-pressed', 'false');
   }
-  await expect(options.getByRole('button', { name: /^g:/ })).toHaveCount(0);
-  await expect(options.getByRole('button', { name: /^d:/ })).toHaveCount(0);
-  await expect(options.locator('#unicode-hint')).toHaveText(copy.unicodeHint);
+  await expect(panel.getByRole('button', { name: /^g:/ })).toHaveCount(0);
+  await expect(panel.getByRole('button', { name: /^d:/ })).toHaveCount(0);
+  await expect(panel.locator('#unicode-hint')).toHaveText(copy.unicodeHint);
   for (const flag of ['i', 'm', 's', 'y'] as const) {
     await flagButton(flag).click();
     await expect(flagButton(flag)).toHaveAttribute('aria-pressed', 'true');
@@ -230,28 +226,50 @@ test('native editor disclosures expose six supported flags and keep Unicode mode
     await flagButton(flag).click();
     await expect(flagButton(flag)).toHaveAttribute('aria-pressed', 'true');
     await expect(flagButton(flag === 'u' ? 'v' : 'u')).toHaveAttribute('aria-pressed', 'false');
-    await expect(options.locator('.flag-chip[aria-pressed="true"]')).toHaveCount(5);
+    await expect(panel.locator('.flag-chip[aria-pressed="true"]')).toHaveCount(5);
     await expect(flagsSummary.locator('.active-flags')).toHaveText(`ims${flag}y`);
+    await expect(flagsSummary).toHaveAttribute('aria-label', `${copy.flagsLabel}: ims${flag}y`);
     await expect.poll(sharedFlags).toBe(`ims${flag}y`);
     await expect(page.locator('#pattern-error')).toHaveCount(0);
   }
   await flagsSummary.click();
   await expect(options).toHaveJSProperty('open', false);
-  await expect(options.locator('.flag-controls')).toBeHidden();
+  await expect(panel).toBeHidden();
   await expect(flagsSummary.locator('.active-flags')).toHaveText('imsuy');
   await flagsSummary.press('Enter');
   await expect(options).toHaveJSProperty('open', true);
-  await expect(flagButton('u')).toHaveAttribute('aria-pressed', 'true');
+  for (const flag of ['i', 'm', 's', 'u', 'y'] as const) {
+    await expect(flagButton(flag)).toHaveAttribute('aria-pressed', 'true');
+  }
   await expect(flagButton('v')).toHaveAttribute('aria-pressed', 'false');
+  await flagButton('u').press('Escape');
+  await expect(options).toHaveJSProperty('open', false);
+  await expect(panel).toBeHidden();
+  await expect(flagsSummary).toBeFocused();
+  await flagsSummary.press('Enter');
+  await flagButton('y').focus();
+  await page.keyboard.press('Tab');
+  await expect(page.locator('#test-string')).toBeFocused();
+  await expect(options).toHaveJSProperty('open', false);
+  await expect(panel).toBeHidden();
+  await flagsSummary.click();
+  await expect(options).toHaveJSProperty('open', true);
+  await page.locator('#test-string').dispatchEvent('pointerdown');
+  await expect(options).toHaveJSProperty('open', false);
+  await expect(panel).toBeHidden();
+  await page.locator('#test-string').click();
+  await expect(page.locator('#test-string')).toBeFocused();
+  await flagsSummary.click();
   for (const flag of ['i', 'm', 's', 'u', 'y'] as const) {
     await flagButton(flag).click();
     await expect(flagButton(flag)).toHaveAttribute('aria-pressed', 'false');
   }
-  await expect(flagsSummary.locator('.active-flags')).toHaveText(copy.noFlags);
+  await expect(flagsSummary.locator('.active-flags')).toHaveText(copy.flagsPlaceholder);
+  await expect(flagsSummary).toHaveAttribute('aria-label', `${copy.flagsLabel}: ${copy.noFlags}`);
   await expect.poll(sharedFlags).toBe('');
   await flagsSummary.press('Space');
   await expect(options).toHaveJSProperty('open', false);
-  await expect(options.locator('.flag-controls')).toBeHidden();
+  await expect(panel).toBeHidden();
   expect(errors).toEqual([]);
 });
 
@@ -270,13 +288,43 @@ test('desktop grid separates the editor, canvas, HUD and playback without horizo
     { width: 1024, height: 768 },
   ]) {
     await page.setViewportSize(viewport);
+    const patternEditor = page.locator('.pattern-editor');
+    const options = patternEditor.locator('details.pattern-options');
+    const summary = options.locator(':scope > summary');
+    await expect(options).toHaveCount(1);
+    await expect(page.locator('.editor-options, .preset-note, .pattern-flags')).toHaveCount(0);
+    await expect(page.getByText('About this example', { exact: true })).toHaveCount(0);
     for (const expanded of [false, true]) {
-      if (expanded) {
-        await page.locator('.editor-options > summary').click();
-        await page.locator('.preset-note > summary').click();
+      if (expanded) await summary.click();
+      await expect(options).toHaveJSProperty('open', expanded);
+      const row = (await patternEditor.boundingBox())!;
+      const pattern = (await patternEditor.locator('#pattern').boundingBox())!;
+      const flags = (await summary.boundingBox())!;
+      for (const box of [pattern, flags]) {
+        expect(box.width).toBeGreaterThan(0);
+        expect(box.height).toBeGreaterThan(0);
+        expect(box.x).toBeGreaterThanOrEqual(row.x);
+        expect(box.x + box.width).toBeLessThanOrEqual(row.x + row.width);
+        expect(box.y).toBeGreaterThanOrEqual(row.y);
+        expect(box.y + box.height).toBeLessThanOrEqual(row.y + row.height);
       }
-      await expect(page.locator('.editor-options')).toHaveJSProperty('open', expanded);
-      await expect(page.locator('.preset-note')).toHaveJSProperty('open', expanded);
+      expect(Math.abs(pattern.y + pattern.height / 2 - (flags.y + flags.height / 2))).toBeLessThanOrEqual(1);
+      expect(pattern.x + pattern.width).toBeLessThanOrEqual(flags.x);
+      const panel = options.locator('.flag-panel');
+      if (expanded) {
+        await expect(panel).toBeVisible();
+        const menu = (await panel.boundingBox())!;
+        const input = (await page.locator('#test-string').boundingBox())!;
+        expect(menu.x).toBeGreaterThanOrEqual(0);
+        expect(menu.x + menu.width).toBeLessThanOrEqual(viewport.width);
+        expect(menu.y).toBeGreaterThanOrEqual(row.y + row.height);
+        expect(Math.max(menu.x, input.x)).toBeLessThan(Math.min(menu.x + menu.width, input.x + input.width));
+        expect(Math.max(menu.y, input.y)).toBeLessThan(
+          Math.min(menu.y + menu.height, input.y + input.height),
+        );
+      } else {
+        await expect(panel).toBeHidden();
+      }
       const selectors = [
         '.brand-header',
         '.control-island',
@@ -321,8 +369,9 @@ test('desktop grid separates the editor, canvas, HUD and playback without horizo
         ),
       ).toBeLessThanOrEqual(0);
       if (expanded) {
-        await page.locator('.preset-note > summary').click();
-        await page.locator('.editor-options > summary').click();
+        await summary.click();
+        await expect(options).toHaveJSProperty('open', false);
+        await expect(panel).toBeHidden();
       }
     }
   }
@@ -415,6 +464,9 @@ test('machine always runs in single view and URL hash round-trips state', async 
   await openControls(page);
   await expect(page.locator('#pattern')).toHaveValue(shared.pattern);
   await expect(page.locator('#test-string')).toHaveValue(shared.input);
+  const flagsSummary = page.locator('.pattern-editor .pattern-options > summary');
+  await expect(flagsSummary.locator('.active-flags')).toHaveText(shared.flags);
+  await expect(flagsSummary).toHaveAttribute('aria-label', `${copy.flagsLabel}: ${shared.flags}`);
   await expect(canvas).toHaveAttribute('data-linear', 'off');
   await page.getByRole('button', { name: copy.share.copyLink }).click();
   await expect(page.locator('.share-status')).toHaveText(copy.share.copied);

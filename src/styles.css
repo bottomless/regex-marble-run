@@ -424,34 +424,38 @@ h1 {
   opacity: 1;
 }
 
-.pattern-capsule {
+.pattern-editor {
+  position: relative;
   display: flex;
-  align-items: center;
-  gap: 5px;
-  height: 44px;
-  padding: 0 12px;
+  min-width: 0;
   border: 1px solid var(--rule);
   border-radius: var(--radius);
   background: var(--field);
-  font: 14px / 1.5 var(--mono);
 }
 
-.pattern-capsule:focus-within {
+.pattern-editor:focus-within {
   outline: 2px solid var(--cobalt);
   outline-offset: 2px;
 }
 
-.pattern-capsule--invalid {
+.pattern-editor--invalid {
   border-color: var(--vermilion);
+}
+
+.pattern-capsule {
+  --pattern-height: 44px;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  gap: 5px;
+  height: var(--pattern-height);
+  padding: 0 12px;
+  font: 14px / 1.5 var(--mono);
 }
 
 .pattern-delimiter {
   color: var(--brass);
-}
-
-.pattern-flags {
-  color: var(--cobalt);
-  font-size: 13px;
 }
 
 .pattern-field {
@@ -464,7 +468,7 @@ h1 {
 .pattern-backdrop {
   position: absolute;
   inset: 0;
-  padding: 10px 0;
+  padding: calc((var(--pattern-height) - 1.5em) / 2) 0;
   overflow: hidden;
   white-space: pre;
   font: inherit;
@@ -490,8 +494,9 @@ h1 {
 .pattern-capsule input {
   position: relative;
   width: 100%;
+  height: 100%;
   min-width: 0;
-  padding: 10px 0;
+  padding: 0;
   border: 0;
   border-radius: 0;
   outline: none;
@@ -514,71 +519,111 @@ textarea {
   font: 14px / 1.6 var(--mono);
 }
 
-.editor-options,
-.preset-note {
-  min-width: 0;
-  border-top: 1px solid var(--rule);
-  padding-top: 8px;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.6;
+.pattern-options {
+  flex-shrink: 0;
+  border-left: 1px solid var(--rule);
 }
 
-.editor-options summary,
-.preset-note summary {
+.pattern-options > summary {
+  height: 100%;
+  min-width: 74px;
+  justify-content: center;
+  padding: 0 10px;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  color: var(--muted);
+}
+
+.pattern-options > summary::before {
+  order: 1;
+  transform: rotate(45deg);
+  margin-top: -3px;
+}
+
+.pattern-options[open] > summary::before {
+  transform: rotate(225deg);
+  margin-top: 3px;
+}
+
+.pattern-options > summary:hover,
+.pattern-options[open] > summary {
+  background: var(--paper);
   color: var(--ink);
 }
 
 .active-flags {
-  margin-left: auto;
-  color: var(--muted);
-  font: 12px / 1.5 var(--mono);
+  font-size: 13px;
   font-weight: 400;
 }
 
+.active-flags[data-active='true'] {
+  color: var(--cobalt);
+  font-family: var(--mono);
+}
+
+.flag-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  left: 0;
+  z-index: 15;
+  padding: 8px;
+  max-height: min(360px, 50dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+
 .flag-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 7px;
+  display: grid;
+  gap: 4px;
   min-width: 0;
-  margin: 10px 0 0;
+  margin: 0;
   padding: 0;
   border: 0;
 }
 
-.flags-label {
-  flex-basis: 100%;
-  color: var(--muted);
-  font-size: 13px;
-}
-
 .flag-chip {
-  width: var(--hit-area);
-  padding: 0;
-  border: 1px solid var(--rule);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid transparent;
   border-radius: var(--radius);
   background: transparent;
-  font: 14px / 1 var(--mono);
+  font-size: 13px;
+  text-align: left;
 }
 
+.flag-chip code {
+  display: grid;
+  place-items: center;
+  flex: 0 0 24px;
+  height: 24px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  color: var(--muted);
+  font: 13px / 1 var(--mono);
+}
+
+.flag-chip:hover,
 .flag-chip[aria-pressed='true'] {
-  border-color: var(--ink);
-  background: var(--ink);
+  background: var(--field);
+}
+
+.flag-chip[aria-pressed='true'] code {
+  border-color: var(--cobalt);
+  background: var(--cobalt);
   color: var(--paper);
 }
 
-.flag-chip--unavailable {
-  border-color: transparent;
-  color: var(--muted);
-  opacity: 0.55;
-  text-decoration: line-through;
-}
-
 .options-hint {
-  margin: 12px 0 0;
+  margin: 8px 8px 4px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .pattern-error {
@@ -600,18 +645,6 @@ textarea {
   border-left: 2px solid var(--vermilion);
   background: var(--field);
   font: 12px / 1.5 var(--mono);
-}
-
-.preset-note p {
-  margin: 8px 0 0;
-}
-
-.preset-note a {
-  display: inline-block;
-  margin-top: 8px;
-  padding: 4px 0;
-  color: var(--cobalt);
-  text-underline-offset: 3px;
 }
 
 .editor-footnote {
@@ -1892,7 +1925,7 @@ textarea {
   }
 
   .pattern-capsule {
-    height: 48px;
+    --pattern-height: 48px;
     font-size: 16px;
   }
 
