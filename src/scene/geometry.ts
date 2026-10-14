@@ -148,7 +148,13 @@ export function sweepFrames(curve: CatmullRomCurve3, segments: number): SweepFra
 }
 
 /** Sweeps an axis-aligned rectangle (in the frame's right/up plane) along the frames, capped at both ends. */
-export function sweepRect(frames: SweepFrame[], x0: number, x1: number, y0: number, y1: number): BufferGeometry {
+export function sweepRect(
+  frames: SweepFrame[],
+  x0: number,
+  x1: number,
+  y0: number,
+  y1: number,
+): BufferGeometry {
   const corners: [number, number][] = [
     [x0, y0],
     [x1, y0],
@@ -230,7 +236,11 @@ export function buildTrackBatches(machine: MachineLayout): TrackBatch[] {
     const rear = piece.kind === 'returnRail' || piece.kind === 'backLift';
     const lift = piece.kind === 'loopLift';
     if (rear || lift) {
-      add(piece.role === 'look' ? 'scout' : lift ? roleFinish(piece) : 'steel', piece.points, rear ? 0.065 : 0.11);
+      add(
+        piece.role === 'look' ? 'scout' : lift ? roleFinish(piece) : 'steel',
+        piece.points,
+        rear ? 0.065 : 0.11,
+      );
       if (lift) add('steel', piece.points, 0.03, 0.14);
     } else {
       channel(
@@ -244,6 +254,10 @@ export function buildTrackBatches(machine: MachineLayout): TrackBatch[] {
     for (const part of parts) part.dispose();
     return { finish, geometry };
   });
+}
+
+export function letterGlyph(glyph: string): string {
+  return glyph === ' ' ? '·' : glyph === '\n' ? '↵' : glyph === '\t' ? '⇥' : glyph;
 }
 
 export function visibleTiles(

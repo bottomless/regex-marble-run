@@ -56,7 +56,15 @@ function CaptureFrame({ piece, onHover }: { piece: Piece; onHover?: (piece: Piec
   );
 }
 
-function Bowl({ piece, materials }: { piece: Piece; materials: Materials }) {
+function Bowl({
+  piece,
+  materials,
+  hideSample = false,
+}: {
+  piece: Piece;
+  materials: Materials;
+  hideSample?: boolean;
+}) {
   const p = piece.position;
   const hopper = piece.kind === 'hopper';
   const profile = useMemo(
@@ -81,7 +89,7 @@ function Bowl({ piece, materials }: { piece: Piece; materials: Materials }) {
       <mesh position={[0, 0.34, 0]} rotation={[Math.PI / 2, 0, 0]} material={materials.brass}>
         <torusGeometry args={[0.8, 0.045, 8, 32]} />
       </mesh>
-      {hopper && (
+      {hopper && !hideSample && (
         <mesh position={[0, 0.66, 0.09]} material={materials.marble} castShadow>
           <sphereGeometry args={[0.24, 24, 16]} />
         </mesh>
@@ -102,12 +110,14 @@ export default function Pieces({
   materials,
   onExpand,
   animatedChoices = false,
+  hideSample = false,
 }: {
   machine: MachineLayout;
   program: Program;
   materials: Materials;
   onExpand: (id: number) => void;
   animatedChoices?: boolean;
+  hideSample?: boolean;
 }) {
   const lit = usePieceHighlight(program);
   const hardware = useMemo(() => {
@@ -208,7 +218,7 @@ export default function Pieces({
           if (piece.kind === 'groupFrame')
             return <CaptureFrame key={i} piece={piece} onHover={(hovered) => hoverPiece(program, hovered)} />;
           if (piece.kind === 'hopper' || piece.kind === 'cup')
-            return <Bowl key={i} piece={piece} materials={materials} />;
+            return <Bowl key={i} piece={piece} materials={materials} hideSample={hideSample} />;
           if (piece.kind === 'module')
             return (
               <group

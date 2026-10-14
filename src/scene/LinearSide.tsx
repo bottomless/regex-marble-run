@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { Base, LetterMarble } from './Machine.tsx';
+import { RoundedBox } from '@react-three/drei';
 import { useStore } from 'zustand';
 import { InstancedMesh, Object3D, SphereGeometry } from 'three';
 import type { Program } from '../engine/ir.ts';
@@ -12,6 +12,7 @@ import { parallelMarbles, syncLinear, type LinearRun, type LinearSync } from '..
 import type { PlaybackStore } from '../playback/store.ts';
 import { visibleTiles, type DisplayMetrics } from './geometry.ts';
 import type { Materials } from './materials.ts';
+import { Base } from './Machine.tsx';
 import Tracks from './Tracks.tsx';
 import Gates from './Gates.tsx';
 import Pieces from './Pieces.tsx';
@@ -59,10 +60,7 @@ function ParallelMarbles({
   const canvas = useThree((state) => state.gl.domElement);
   const geometry = useMemo(() => new SphereGeometry(MARBLE_RADIUS, 20, 20), []);
   useEffect(() => () => geometry.dispose(), [geometry]);
-  const targets = useMemo(
-    () => parallelMarbles(machine, sync.tick).slice(0, MARBLE_CAP),
-    [machine, sync.tick],
-  );
+  const targets = useMemo(() => parallelMarbles(machine, sync.tick).slice(0, MARBLE_CAP), [machine, sync.tick]);
   const movers = useRef(new Map<number, Mover>());
   const dummy = useMemo(() => new Object3D(), []);
 
@@ -72,10 +70,7 @@ function ParallelMarbles({
     for (const target of targets) {
       if (movers.current.has(target.id)) continue;
       const origin = movers.current.get(target.parent) ?? target.position;
-      movers.current.set(
-        target.id,
-        reducedMotion ? { ...target.position } : { x: origin.x, y: origin.y, z: origin.z },
-      );
+      movers.current.set(target.id, reducedMotion ? { ...target.position } : { x: origin.x, y: origin.y, z: origin.z });
     }
     canvas.setAttribute('data-linear-marbles', String(targets.length));
     canvas.setAttribute('data-linear-pos', String(sync.tick?.pos ?? -1));
@@ -83,12 +78,7 @@ function ParallelMarbles({
     canvas.setAttribute('data-linear-finished', String(sync.finished));
     invalidate();
     return () => {
-      for (const name of [
-        'data-linear-marbles',
-        'data-linear-pos',
-        'data-linear-tick',
-        'data-linear-finished',
-      ]) {
+      for (const name of ['data-linear-marbles', 'data-linear-pos', 'data-linear-tick', 'data-linear-finished']) {
         canvas.removeAttribute(name);
       }
     };
@@ -124,12 +114,7 @@ function ParallelMarbles({
   });
 
   return (
-    <instancedMesh
-      ref={ref}
-      args={[geometry, materials.marble, MARBLE_CAP]}
-      castShadow
-      frustumCulled={false}
-    />
+    <instancedMesh ref={ref} args={[geometry, materials.marble, MARBLE_CAP]} castShadow frustumCulled={false} />
   );
 }
 
@@ -149,7 +134,6 @@ function LinearTileRail({
   const count = Math.min(24, Math.floor((metrics.boardWidth - 1) / 0.4));
   const tiles = visibleTiles(input, unicode, count);
   const pitch = Math.min(0.49, (metrics.boardWidth - 1) / Math.max(1, tiles.length));
-  const radius = Math.min(0.15, Math.max(0.09, pitch * 0.36));
   const front = metrics.boardDepth / 2 - 0.27;
   const head = sync.tick?.pos ?? -1;
   return (
@@ -161,15 +145,22 @@ function LinearTileRail({
         const consumed = head >= 0 && tile.index < head;
         const isHead = head >= 0 && tile.index <= head && head < tile.index + tile.glyph.length;
         return (
-          <group key={tile.index} position={[(i - (tiles.length - 1) / 2) * pitch, 0.6 + radius, front]}>
-            <LetterMarble
-              glyph={tile.glyph}
-              index={tile.index}
-              radius={radius}
-              pitch={pitch}
-              materials={materials}
-              tone={isHead ? 'head' : consumed ? 'consumed' : 'pending'}
+          <group key={tile.index} position={[(i - (tiles.length - 1) / 2) * pitch, 0.69, front]}>
+            <RoundedBox
+              args={[pitch - 0.035, 0.24, 0.38]}
+              radius={0.03}
+              smoothness={2}
+              material={consumed ? materials.tracks.teal : materials.tracks.birch}
+              castShadow
             />
+            <Glyph
+              text={tile.glyph === ' ' ? '·' : tile.glyph === '\n' ? '↵' : tile.glyph === '\t' ? '⇥' : tile.glyph}
+              position={[0, 0.02, 0.2]}
+              size={0.2}
+              width={pitch - 0.06}
+              color={consumed ? '#f4efe2' : '#30362d'}
+            />
+            <Glyph text={String(tile.index)} position={[0, -0.12, 0.205]} size={0.065} color="#82745e" />
             {isHead && (
               <mesh position={[0, -0.19, 0]} material={materials.brass} castShadow>
                 <boxGeometry args={[pitch - 0.06, 0.05, 0.06]} />
@@ -226,12 +217,7 @@ export default function LinearSide({
             emphasis={Math.min(1.3, Math.max(1, 0.75 / metrics.scale))}
           />
           <Pieces machine={machine} program={program} materials={materials} onExpand={onExpand} />
-          <ParallelMarbles
-            machine={machine}
-            sync={sync}
-            materials={materials}
-            reducedMotion={reducedMotion}
-          />
+          <ParallelMarbles machine={machine} sync={sync} materials={materials} reducedMotion={reducedMotion} />
         </group>
       </group>
       <LinearTileRail

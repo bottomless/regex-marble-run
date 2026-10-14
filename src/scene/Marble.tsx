@@ -6,6 +6,9 @@ import type { MachineLayout } from '../layout/pieces.ts';
 import { carriageAtIndex, carriedMarblePosition } from '../playback/carriage.ts';
 import type { PlaybackStore } from '../playback/store.ts';
 import { poseAtIndex } from '../playback/motion.ts';
+import { useStore } from 'zustand';
+import { letterGlyph, visibleTiles } from './geometry.ts';
+import Glyph from './Glyph.tsx';
 import type { Materials } from './materials.ts';
 import { palette } from './materials.ts';
 import { Ride } from './ride.ts';
@@ -31,16 +34,27 @@ export default function Marble({
   machine,
   materials,
   emphasis = 1,
+  input = '',
+  unicode = false,
 }: {
   store: PlaybackStore;
   machine: MachineLayout;
   materials: Materials;
   emphasis?: number;
+  input?: string;
+  unicode?: boolean;
 }) {
   const ref = useRef<Group>(null);
   const ball = useRef<Mesh>(null);
   const last = useRef<Vector3 | null>(null);
   const ride = useMemo(() => new Ride(machine), [machine]);
+  const head = useStore(store, (s) => s.machine?.head ?? -1);
+  const glyph = useMemo(() => {
+    const tile = visibleTiles(input, unicode, 64).find(
+      (item) => item.index <= head && head < item.index + item.glyph.length,
+    );
+    return tile ? letterGlyph(tile.glyph) : '';
+  }, [input, unicode, head]);
   const invalidate = useThree((state) => state.invalidate);
   const halo = useMemo(
     () =>
@@ -66,7 +80,9 @@ export default function Marble({
     const riding = snapshot.timeline
       ? carriageAtIndex(machine, snapshot.timeline, snapshot.segmentIndex, snapshot.fraction)
       : null;
-    const pose = snapshot.timeline ? poseAtIndex(machine, snapshot.timeline, snapshot.segmentIndex, snapshot.fraction) : null;
+    const pose = snapshot.timeline
+      ? poseAtIndex(machine, snapshot.timeline, snapshot.segmentIndex, snapshot.fraction)
+      : null;
     if (pose && snapshot.timeline) {
       const carried = riding
         ? carriedMarblePosition(riding.rail)
@@ -80,7 +96,8 @@ export default function Marble({
         const distance = step.length();
         if (distance > 1e-5 && distance < 2) {
           const axis = new Vector3().crossVectors(WORLD_UP, step.normalize());
-          if (axis.lengthSq() > 1e-8) sphere.rotateOnWorldAxis(axis.normalize(), distance / (MARBLE_RADIUS * emphasis));
+          if (axis.lengthSq() > 1e-8)
+            sphere.rotateOnWorldAxis(axis.normalize(), distance / (MARBLE_RADIUS * emphasis));
         }
       }
       last.current = previous ? previous.copy(group.position) : group.position.clone();
@@ -97,6 +114,15 @@ export default function Marble({
         <sphereGeometry args={[MARBLE_RADIUS, 32, 32]} />
         <primitive object={materials.marble} attach="material" />
       </mesh>
+      {glyph && (
+        <Glyph
+          text={glyph}
+          position={[0, 0.02, MARBLE_RADIUS + 0.02]}
+          size={0.22}
+          width={0.36}
+          color="#30362d"
+        />
+      )}
       <mesh material={halo} renderOrder={-1}>
         <sphereGeometry args={[MARBLE_RADIUS * 1.4, 24, 24]} />
       </mesh>

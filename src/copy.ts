@@ -37,7 +37,7 @@ export const copy = {
   editorHint: 'Edit below. The machine updates as you type.',
   noFlags: 'None',
   emptyInput: 'Empty string',
-  marbleHint: 'Each letter is one marble on the rail. The runner marble tests them at the gates.',
+  marbleHint: 'Each letter is a marble. They enter one at a time; backtracking pulls them back.',
   controls: 'Pattern and test string controls',
   machine: 'Regular expression machine',
   building: 'Building the machine…',
@@ -164,7 +164,7 @@ export const copy = {
       kind: 'marble',
       label: 'Marble',
       detail:
-        'One marble for each letter of the test string. The runner marble rides the track and tests them.',
+        'One marble per letter. Letters wait at the inlet, ride the track one at a time, and collect when accepted. Backtracking sends them back.',
     },
     {
       kind: 'gate',
@@ -184,7 +184,7 @@ export const copy = {
     {
       kind: 'capture',
       label: 'Capture frame',
-      detail: 'Frames a group. Brackets above the letter marbles show what it caught.',
+      detail: 'Frames a group. Brackets on the tile rail show what it caught.',
     },
     {
       kind: 'sensor',
