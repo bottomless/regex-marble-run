@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { parsePattern } from '../../src/engine/parse.ts';
 import { runBacktrack } from '../../src/engine/backtrack.ts';
-import { layout } from '../../src/layout/layout.ts';
+import { layout, STAIR_STEP } from '../../src/layout/layout.ts';
 import type { MachineLayout, PieceKind, Vec3 } from '../../src/layout/pieces.ts';
-import { buildTimeline } from '../../src/playback/timeline.ts';
+import { polylineLength } from '../../src/playback/motion.ts';
+import { buildTimeline, ROLL_PER_UNIT_MS } from '../../src/playback/timeline.ts';
+import { copy } from '../../src/copy.ts';
 import { castAt, compileCast, hiddenLoopPieces, type LetterCast } from '../../src/scene/letterCast.ts';
 
 const LOOP: PieceKind[] = ['bypassChute', 'returnRail', 'loopLift', 'backLift'];
@@ -121,5 +123,117 @@ describe('letter cast', () => {
     const waiting = castAt(long.cast, 0, null);
     expect(waiting.filter((place) => place.kind === 'hold' && place.visible)).toHaveLength(8);
     expect(waiting.some((place) => place.kind === 'hold' && !place.visible)).toBe(true);
+  });
+
+  it('moves every marble continuously without jumping across presets and backtracking', () => {
+    const cases: [string, string][] = [
+      ['c(a|o)t', 'the cot'],
+      ['<.+>', '<b>bold</b>'],
+      ['<.+?>', '<b>bold</b>'],
+      ['colou?r', 'my color'],
+      ['(\\w)\\1', 'hello'],
+      ['a+b', 'aaac'],
+    ];
+    const dt = 10;
+    const expectedSpeed = 1 / ROLL_PER_UNIT_MS;
+    const maxStep = expectedSpeed * dt * 1.05 + 1e-4;
+    for (const [pattern, input] of cases) {
+      const { timeline, cast } = ride(pattern, input);
+      let prev = castAt(cast, 0, null);
+      for (let t = dt; t <= timeline.duration + 400; t += dt) {
+        const curr = castAt(cast, t, null);
+        for (let i = 0; i < curr.length; i++) {
+          const step = dist(prev[i].position, curr[i].position);
+          expect(step, `${pattern} on ${input} tile ${i} at t=${t}`).toBeLessThanOrEqual(maxStep);
+        }
+        prev = curr;
+      }
+    }
+  });
+
+  it('maintains identical constant marble speed regardless of marble count or machine complexity', () => {
+    const expectedSpeed = 1 / ROLL_PER_UNIT_MS;
+    const runs = [
+      ride('a', 'a'),
+      ride('a', 'a'.repeat(24)),
+      ride('c(a|o)t', 'the cot'),
+      ride('<.+>', '<b>bold</b>'),
+      ride('^(?=.*\\d)(?=.*[a-z]).{8,}$', 'hunter22x'),
+    ];
+    for (const { cast } of runs) {
+      for (const tileSpans of cast.spans) {
+        for (const span of tileSpans) {
+          if (!span.points || span.points.length < 2) continue;
+          const length = polylineLength(span.points);
+          const duration = span.t1 - span.t0;
+          expect(duration).toBeGreaterThan(0);
+          expect(length / duration).toBeCloseTo(expectedSpeed, 5);
+        }
+      }
+    }
+  });
+
+  it('gathers accepted marbles in gate holding containers and settles matches in the wide success container', () => {
+    expect(STAIR_STEP).toBeGreaterThan(2.4);
+    expect(copy.scene.match).toBe('SUCCESS');
+    expect(copy.scene.hold).toBe('HOLD');
+    const { machine, timeline, cast } = ride('c(a|o)t', 'the cot');
+    const cGate = machine.pieces.find((piece) => piece.kind === 'gate' && piece.label === 'c')!;
+    const passedC = timeline.segments.find((segment) => segment.kind === 'gate' && segment.pos === 4 && segment.ok === true)!;
+    const heldAtC = castAt(cast, passedC.t1 + 1, null)[4];
+    expect(heldAtC.kind).toBe('park');
+    expect(heldAtC.position.y).toBeLessThan(cGate.position.y);
+    expect(heldAtC.position.z).toBeGreaterThan(cGate.position.z);
+  });
+
+  it('releases multiple gathered marbles from a gate as a separated rolling train instead of overlapping as one', () => {
+    const { timeline, cast } = ride('<.+>', '<b>bold</b>');
+    const finish = timeline.segments.find((segment) => segment.kind === 'finish')!;
+    expect(finish).toBeTruthy();
+    const midCup = castAt(cast, finish.t0 + 450, null);
+    const rolling = midCup.filter((place) => place.kind === 'cup');
+    expect(rolling.length).toBeGreaterThanOrEqual(3);
+    for (let i = 0; i < rolling.length; i++) {
+      for (let j = i + 1; j < rolling.length; j++) {
+        expect(dist(rolling[i].position, rolling[j].position)).toBeGreaterThan(0.35);
+      }
+    }
+  });
+
+  it('routes every marble along connected spline tracks without straight-line shortcuts across components', () => {
+    const cases: [string, string][] = [
+      ['<.+>', '<b>bold</b>'],
+      ['<.+?>', '<b>bold</b>'],
+      ['c(a|o)t', 'the cot'],
+      ['colou?r', 'my color'],
+      ['(\\w)\\1', 'hello'],
+      ['^(?=.*\\d)(?=.*[a-z]).{8,}$', 'hunter22x'],
+      ['a+b', 'aaac'],
+      ['a{2,4}b', 'aaab'],
+      ['a(?=b)c', 'abc'],
+      ['a(?!b)', 'abac'],
+      ['(a)+b', 'aab'],
+    ];
+    for (const [pattern, input] of cases) {
+      const { cast } = ride(pattern, input);
+      cast.spans.forEach((spans, tile) => {
+        spans.forEach((span, spanIdx) => {
+          if (!span.points || span.kind === 'fall') return;
+          for (let k = 1; k < span.points.length; k++) {
+            const step = dist(span.points[k - 1], span.points[k]);
+            expect(
+              step,
+              `${pattern} on "${input}" tile ${tile} (${cast.glyphs[tile]}) span ${spanIdx} (${span.kind})`,
+            ).toBeLessThanOrEqual(1.4);
+          }
+        });
+      });
+    }
+    const greedy = ride('<.+>', '<b>bold</b>');
+    const lastTileMoving = greedy.cast.spans[10].filter((span) => span.points && span.points.length >= 2);
+    expect(lastTileMoving.map((span) => span.kind)).toEqual(['follow', 'follow', 'cup']);
+    for (const pt of lastTileMoving[1].points!) {
+      expect(pt.y).toBeLessThanOrEqual(-5.5);
+    }
   });
 });

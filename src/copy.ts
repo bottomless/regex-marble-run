@@ -43,7 +43,8 @@ export const copy = {
   building: 'Building the machine…',
   scene: {
     inlet: 'IN',
-    match: 'MATCH',
+    hold: 'HOLD',
+    match: 'SUCCESS',
     reject: 'REJECT',
     base: 'REGEX MARBLE RUN',
     input: 'INPUT / UTF-16',

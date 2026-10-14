@@ -62,21 +62,19 @@ export const SPEED_STEPS = [0.25, 0.5, 1, 2, 4, 16, 64] as const;
 export const COLLAPSE_SPEED = 16;
 
 const BASE_MS: Record<SegmentKind, number> = {
-  hop: 520,
-  roll: 320,
-  gate: 440,
-  drop: 320,
-  lift: 640,
-  flag: 280,
-  iter: 140,
-  scout: 360,
+  hop: 320,
+  roll: 240,
+  gate: 240,
+  drop: 240,
+  lift: 320,
+  flag: 180,
+  iter: 120,
+  scout: 260,
   capture: 0,
   finish: 520,
 };
 
-const ROLL_PER_UNIT_MS = 90;
-const ROLL_MIN_MS = 240;
-const ROLL_MAX_MS = 1800;
+export const ROLL_PER_UNIT_MS = 95;
 
 function routeLength(layout: MachineLayout, route: number[]): number {
   let total = 0;
@@ -89,10 +87,9 @@ function routeLength(layout: MachineLayout, route: number[]): number {
   return total;
 }
 
-function rollBase(layout: MachineLayout, route: number[] | null): number {
-  if (!route || route.length < 2) return BASE_MS.roll;
-  const scaled = routeLength(layout, route) * ROLL_PER_UNIT_MS;
-  return Math.min(ROLL_MAX_MS, Math.max(ROLL_MIN_MS, scaled));
+function rollBase(layout: MachineLayout, route: number[] | null | undefined, extraUnits = 0): number {
+  if (!route || route.length < 2) return extraUnits > 0 ? extraUnits * ROLL_PER_UNIT_MS : BASE_MS.roll;
+  return (routeLength(layout, route) + extraUnits) * ROLL_PER_UNIT_MS;
 }
 
 function scale(kind: SegmentKind, base: number, speed: number, collapsed: boolean): number {
@@ -106,14 +103,22 @@ export function buildTimeline(trace: Trace, layout: MachineLayout, opts: Timelin
   const instant = !Number.isFinite(speed);
   const collapsed = instant || speed >= COLLAPSE_SPEED;
   const { graph, anchors } = layout;
+  const hopperPiece = layout.pieces.findIndex((piece) => piece.kind === 'hopper');
+  const hopperPoint = layout.graph.edges.find((edge) => edge.piece === hopperPiece)?.from ?? null;
+  const cupPiece = layout.pieces.findIndex((piece) => piece.kind === 'cup');
+  const cupPoint = layout.graph.edges.find((edge) => edge.piece === cupPiece)?.to ?? null;
   const segments: Segment[] = [];
   let t = 0;
   let currentPoint: number | null = null;
+  let attemptMaxPos = 0;
+  let attemptStartBase = 0;
+  let totalBase = 0;
 
   const emit = (kind: SegmentKind, event: number, primary: boolean, base: number, node: NodeId | null, extra: Partial<Segment> = {}): void => {
     const d = scale(kind, base, speed, collapsed);
     segments.push({ kind, event, primary, t0: t, t1: t + d, jump: d === 0, node, ...extra });
     t += d;
+    totalBase += base;
   };
 
   const route = (from: number | null | undefined, to: number | undefined): number[] | undefined => {
@@ -129,16 +134,39 @@ export function buildTimeline(trace: Trace, layout: MachineLayout, opts: Timelin
     const d = trace.d[i];
     switch (trace.t[i] as T) {
       case T.attempt: {
-        currentPoint = null;
-        emit('hop', i, true, BASE_MS.hop, null, { pos: a });
+        const curPos = currentPoint !== null ? layout.graph.points[currentPoint]?.position : null;
+        const hopPos = hopperPoint !== null ? layout.graph.points[hopperPoint]?.position : null;
+        const rearZ = Math.min(layout.bounds.min.z - 0.8, -2.0);
+        const returnUnits =
+          a > 0 && curPos && hopPos
+            ? Math.hypot(curPos.x - hopPos.x, curPos.y - hopPos.y) + 2 * Math.abs(rearZ - curPos.z) + 3.2
+            : 0;
+        const hopBase = Math.max(BASE_MS.hop, returnUnits * ROLL_PER_UNIT_MS);
+        currentPoint = hopperPoint;
+        attemptMaxPos = a;
+        emit('hop', i, true, hopBase, null, { pos: a });
+        attemptStartBase = totalBase;
         break;
       }
       case T.test: {
         const node = a;
         const anchor = anchors[node];
-        const r = route(currentPoint, anchor?.entry);
-        if (r) emit('roll', i, false, rollBase(layout, r), node, { route: r });
+        const freshFromHopper = d > 0 && b >= attemptMaxPos;
+        const r = route(currentPoint, anchor?.entry) ?? (freshFromHopper ? route(hopperPoint, anchor?.entry) : undefined);
+        const hopperRoute = freshFromHopper ? route(hopperPoint, anchor?.entry) : undefined;
+        if (r) {
+          const elapsedSinceAttempt = totalBase - attemptStartBase;
+          const neededFromHopper = hopperRoute
+            ? Math.max(0, rollBase(layout, hopperRoute, 2.4) - elapsedSinceAttempt)
+            : 0;
+          const base = Math.max(
+            rollBase(layout, r, currentPoint === hopperPoint ? 2.2 : 0.4),
+            neededFromHopper,
+          );
+          emit('roll', i, false, base, node, { route: r });
+        }
         emit('gate', i, true, BASE_MS.gate, node, { pos: b, len: d, ok: c === 1 });
+        if (c === 1 && d > 0 && b + d > attemptMaxPos) attemptMaxPos = b + d;
         currentPoint = anchor?.exit ?? currentPoint;
         break;
       }
@@ -146,18 +174,18 @@ export function buildTimeline(trace: Trace, layout: MachineLayout, opts: Timelin
         const node = a;
         const anchor = anchors[node];
         const r = route(currentPoint, anchor?.entry);
-        if (r) emit('roll', i, false, rollBase(layout, r), node, { route: r });
+        if (r) emit('roll', i, false, rollBase(layout, r, currentPoint === hopperPoint ? 2.0 : 0.2), node, { route: r });
         emit('flag', i, true, BASE_MS.flag, node, { action: 'plant', option: b, pos: c, depth: d });
-        currentPoint = anchor?.exit ?? currentPoint;
+        currentPoint = anchor?.entry ?? currentPoint;
         break;
       }
       case T.backtrack: {
         const node = a;
         const anchor = anchors[node];
         const drop = route(currentPoint, anchor?.returnPort);
-        if (drop) emit('drop', i, false, BASE_MS.drop, node, { route: drop });
+        if (drop) emit('drop', i, false, rollBase(layout, drop, 0.3), node, { route: drop });
         const lift = route(anchor?.returnPort, anchor?.entry);
-        if (lift) emit('lift', i, false, BASE_MS.lift, node, { route: lift });
+        if (lift) emit('lift', i, false, rollBase(layout, lift, 0.3), node, { route: lift });
         emit('flag', i, true, BASE_MS.flag, node, { action: 'pop', option: b, pos: c, depth: d });
         currentPoint = anchor?.entry ?? currentPoint;
         break;
@@ -175,11 +203,16 @@ export function buildTimeline(trace: Trace, layout: MachineLayout, opts: Timelin
         break;
       }
       case T.match: {
-        emit('finish', i, true, BASE_MS.finish, null, { result: 'match', pos: a, len: b - a });
+        const toCup = route(hopperPoint, cupPoint ?? undefined);
+        const matchCount = Math.max(0, b - a);
+        const finishMs = Math.max(BASE_MS.finish, rollBase(layout, toCup, 2.0) + matchCount * 135);
+        emit('finish', i, true, finishMs, null, { result: 'match', pos: a, len: b - a });
         break;
       }
       case T.nomatch: {
-        emit('finish', i, true, BASE_MS.finish, null, { result: 'reject' });
+        const toCup = route(hopperPoint, cupPoint ?? undefined);
+        const finishMs = Math.max(BASE_MS.finish, rollBase(layout, toCup, 2.0));
+        emit('finish', i, true, finishMs, null, { result: 'reject' });
         break;
       }
     }

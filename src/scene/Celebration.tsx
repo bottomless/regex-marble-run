@@ -31,13 +31,26 @@ export default function Celebration({
   const p = cup.position;
   return (
     <group position={[p.x, p.y, p.z]}>
-      <mesh position={[0, 0.5, 0]} rotation={[Math.PI / 2, 0, 0]} material={materials.brass}>
-        <torusGeometry args={[0.95, 0.05, 10, 40]} />
+      {[-1, 1].map((side) => (
+        <mesh key={`cz-${side}`} position={[0, 0.38, side * 0.72]} material={materials.brass}>
+          <boxGeometry args={[2.5, 0.06, 0.06]} />
+        </mesh>
+      ))}
+      {[-1, 1].map((side) => (
+        <mesh key={`cx-${side}`} position={[side * 1.22, 0.38, 0]} material={materials.brass}>
+          <boxGeometry args={[0.06, 0.06, 1.5]} />
+        </mesh>
+      ))}
+      <mesh position={[0, 0.88, 0.1]} material={materials.brass}>
+        <boxGeometry args={[1.9, 0.3, 0.05]} />
       </mesh>
-      <mesh position={[0, 0.72, 0]} rotation={[Math.PI / 2, 0, 0]} material={materials.brass}>
-        <torusGeometry args={[0.7, 0.035, 10, 36]} />
-      </mesh>
-      <Glyph text={copy.scene.matchSpan(span.start, span.end)} position={[0, 1.05, 0.1]} size={0.16} width={1.4} />
+      <Glyph
+        text={copy.scene.matchSpan(span.start, span.end)}
+        position={[0, 0.88, 0.14]}
+        size={0.15}
+        width={1.75}
+        color="#2a2520"
+      />
     </group>
   );
 }

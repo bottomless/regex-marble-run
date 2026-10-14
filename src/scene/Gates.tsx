@@ -13,6 +13,7 @@ import {
 import type { BufferGeometry, ColorRepresentation, Material } from 'three';
 import type { MachineLayout, Piece } from '../layout/pieces.ts';
 import type { Program } from '../engine/ir.ts';
+import { copy } from '../copy.ts';
 import { highlightStore, nodesWithin, spanForNode, useHighlight } from '../ui/highlight.ts';
 import Glyph from './Glyph.tsx';
 import type { Materials } from './materials.ts';
@@ -281,6 +282,31 @@ export default function Gates({
                       <boxGeometry args={[0.18, 0.96, 0.12]} />
                     </mesh>
                   ))}
+                  <group position={[0, -0.52, 0.28]}>
+                    <mesh position={[0, -0.14, 0]} material={materials.tracks.birch} castShadow receiveShadow>
+                      <boxGeometry args={[1.28, 0.07, 0.62]} />
+                    </mesh>
+                    <mesh position={[0, 0.02, 0.28]} material={materials.tracks.teal} castShadow>
+                      <boxGeometry args={[1.28, 0.26, 0.06]} />
+                    </mesh>
+                    <mesh position={[0, 0.02, -0.28]} material={materials.tracks.edge} castShadow>
+                      <boxGeometry args={[1.28, 0.26, 0.06]} />
+                    </mesh>
+                    {[-1, 1].map((side) => (
+                      <mesh key={side} position={[side * 0.61, 0.02, 0]} material={materials.tracks.edge} castShadow>
+                        <boxGeometry args={[0.06, 0.26, 0.62]} />
+                      </mesh>
+                    ))}
+                    <mesh position={[0, 0.16, 0.28]} material={materials.brass}>
+                      <boxGeometry args={[1.32, 0.04, 0.08]} />
+                    </mesh>
+                    {[-1, 1].map((side) => (
+                      <mesh key={`rim-${side}`} position={[side * 0.61, 0.16, 0]} material={materials.brass}>
+                        <boxGeometry args={[0.08, 0.04, 0.64]} />
+                      </mesh>
+                    ))}
+                    <Glyph text={copy.scene.hold} position={[0, -0.01, 0.32]} size={0.11} width={0.9} color="#f6f0e5" />
+                  </group>
                 </>
               ) : !sensor ? (
                 <>
@@ -295,6 +321,22 @@ export default function Gates({
                       <boxGeometry args={[0.82, 0.72, 0.02]} />
                     </mesh>
                   )}
+                  <group position={[0, -0.52, 0.28]}>
+                    <mesh position={[0, -0.14, 0]} material={materials.tracks.birch} castShadow receiveShadow>
+                      <boxGeometry args={[1.18, 0.07, 0.58]} />
+                    </mesh>
+                    <mesh position={[0, 0.02, 0.26]} material={materials.tracks.teal} castShadow>
+                      <boxGeometry args={[1.18, 0.24, 0.06]} />
+                    </mesh>
+                    {[-1, 1].map((side) => (
+                      <mesh key={side} position={[side * 0.56, 0.02, 0]} material={materials.tracks.edge} castShadow>
+                        <boxGeometry args={[0.06, 0.24, 0.58]} />
+                      </mesh>
+                    ))}
+                    <mesh position={[0, 0.15, 0.26]} material={materials.brass}>
+                      <boxGeometry args={[1.22, 0.04, 0.08]} />
+                    </mesh>
+                  </group>
                 </>
               ) : null}
               <Glyph

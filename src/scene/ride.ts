@@ -20,11 +20,8 @@ function clamp(value: number, lo: number, hi: number): number {
  * gravity (distance ∝ t²), so when the segment starts from rest the front half is slow and the back
  * half quick. A segment that continues a previous travel segment keeps its pace instead.
  */
-export function travelFraction(kind: SegmentKind, fraction: number, fromRest: boolean): number {
-  const f = clamp(fraction, 0, 1);
-  if (!fromRest || kind === 'lift') return f;
-  if (kind === 'drop') return f * f;
-  return Math.pow(f, 1.6);
+export function travelFraction(_kind: SegmentKind, fraction: number, _fromRest: boolean): number {
+  return clamp(fraction, 0, 1);
 }
 
 export function startsFromRest(timeline: Timeline, segmentIndex: number): boolean {
@@ -75,8 +72,14 @@ export class Ride {
       const ib = piece?.points?.findIndex((p) => near(p, b.position)) ?? -1;
       if (curve && piece?.points && ia >= 0 && ib >= 0 && ia !== ib) {
         const n = piece.points.length - 1;
-        for (let s = 1; s < SUBSAMPLES; s++) {
-          const u = (ia + ((ib - ia) * s) / SUBSAMPLES) / n;
+        const chord = Math.hypot(
+          a.position.x - b.position.x,
+          a.position.y - b.position.y,
+          a.position.z - b.position.z,
+        );
+        const samples = Math.max(SUBSAMPLES, Math.ceil(chord * 3));
+        for (let s = 1; s < samples; s++) {
+          const u = (ia + ((ib - ia) * s) / samples) / n;
           const p = curve.getPoint(u);
           out.push({ x: p.x, y: p.y, z: p.z });
         }

@@ -66,9 +66,9 @@ export function displayMetrics(machine: MachineLayout, options: { flood?: boolea
   const width = Math.max(1, max.x - min.x);
   const height = Math.max(1, max.y - min.y);
   const depth = Math.max(1, max.z - min.z);
-  const scale = 11 / Math.max(height, width * 0.85, depth);
+  const scale = 11 / Math.max(height, width * 0.72, depth);
   const scaledHeight = Math.min(11, height * scale);
-  const baseBoardWidth = Math.max(6.5, width * scale + 2);
+  const baseBoardWidth = Math.max(8.2, width * scale + 2.8);
   const boardWidth = options.flood ? baseBoardWidth + TANK_SPAN : baseBoardWidth;
   return {
     scale,

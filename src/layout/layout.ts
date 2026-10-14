@@ -9,9 +9,9 @@ export const HARD_LEAF_CAP = 320;
 const RADIUS = 0.36;
 const GAP = 0.8;
 const DROP = 2;
-const BRANCH_GAP = 2.4;
+const BRANCH_GAP = 3.0;
 /** Horizontal run between consecutive sequence items, so a sequence descends as a staircase. */
-export const STAIR_STEP = 2.4;
+export const STAIR_STEP = 3.0;
 type Bounds = MachineLayout['bounds'];
 type Ref = number | { child: number; port: 'entry' | 'exit' };
 interface Child {
@@ -93,7 +93,7 @@ export function layout(program: Program, options: { expandedModules?: number[] }
   const exit = builder.graph.points[root.exit].position;
   const hopper = addPoint(builder, add(entry, vec(0, 2, 0)), null);
   const cup = addPoint(builder, add(exit, vec(0, -1.8, 0)), null);
-  const reject = addPoint(builder, add(exit, vec(3.2, -1.8, 0)), null);
+  const reject = addPoint(builder, add(exit, vec(3.8, -1.8, 0)), null);
   connect(
     builder,
     'hopper',
@@ -113,7 +113,7 @@ export function layout(program: Program, options: { expandedModules?: number[] }
     cup,
     [],
     'base',
-    vec(1.5, 1, 1.5),
+    vec(2.5, 1, 1.6),
     builder.graph.points[cup].position,
   );
   connect(
@@ -122,9 +122,9 @@ export function layout(program: Program, options: { expandedModules?: number[] }
     null,
     root.exit,
     reject,
-    [add(exit, vec(2.4, -1.1, 0))],
+    [add(exit, vec(2.8, -1.1, 0))],
     'base',
-    vec(2, 1, 2),
+    vec(2.2, 1, 2),
     builder.graph.points[reject].position,
   );
   return {
@@ -408,7 +408,7 @@ function measure(node: IR, collapsed: Set<number>, depth: number, ghost: boolean
     }
     case 'look': {
       const body = measure(node.body, collapsed, depth, true);
-      const offset = vec(2.4 - body.bounds.min.x, -DROP - Math.max(0, body.bounds.max.y), -2.4);
+      const offset = vec(STAIR_STEP - body.bounds.min.x, -DROP - Math.max(0, body.bounds.max.y), -2.4);
       plan.children.push({ plan: body, offset });
       plan.entry = localPoint(plan, vec());
       const pass = localPoint(plan, vec(0, -1.4));
