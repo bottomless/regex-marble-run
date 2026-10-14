@@ -526,7 +526,7 @@ textarea {
 
 .pattern-options > summary {
   height: 100%;
-  min-width: 74px;
+  min-width: 60px;
   justify-content: center;
   padding: 0 10px;
   border-radius: 0 var(--radius) var(--radius) 0;
@@ -551,8 +551,20 @@ textarea {
 }
 
 .active-flags {
+  display: inline-flex;
+  align-items: center;
   font-size: 13px;
   font-weight: 400;
+}
+
+.flags-icon {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .active-flags[data-active='true'] {

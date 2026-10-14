@@ -166,7 +166,8 @@ for (const width of [390, 320]) {
     await expect(editor.locator('#control-fields')).toBeVisible();
     await expect(editor.locator('.collapsed-preview')).toBeHidden();
     await expect(options).toHaveJSProperty('open', false);
-    await expect(summary.locator('.active-flags')).toHaveText(copy.flagsPlaceholder);
+    await expect(summary.locator('.active-flags')).toHaveText('');
+    await expect(summary.locator('.flags-icon')).toBeVisible();
     await expect(summary).toHaveAttribute('aria-label', `${copy.flagsLabel}: ${copy.noFlags}`);
     await expect(panel).toBeHidden();
     await expectMobileLayout(page);

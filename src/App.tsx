@@ -273,7 +273,11 @@ function WorkshopApp() {
                   title={copy.flagsLabel}
                 >
                   <span className="active-flags" data-active={Boolean(draft.flags)}>
-                    {draft.flags || copy.flagsPlaceholder}
+                    {draft.flags || (
+                      <svg className="flags-icon" viewBox="0 0 20 20" aria-hidden="true">
+                        <path d="M5 17V3m0 1c3-3 7 3 11 0v8c-4 3-8-3-11 0" />
+                      </svg>
+                    )}
                   </span>
                 </summary>
                 <div className="flag-panel">

@@ -201,7 +201,8 @@ test('native pattern flags expose six supported modes and keep Unicode modes mut
   await expect(page.getByText('About this example', { exact: true })).toHaveCount(0);
   await expect(options).toHaveJSProperty('open', false);
   await expect(flagsSummary).toHaveAttribute('aria-label', `${copy.flagsLabel}: ${copy.noFlags}`);
-  await expect(flagsSummary.locator('.active-flags')).toHaveText(copy.flagsPlaceholder);
+  await expect(flagsSummary.locator('.active-flags')).toHaveText('');
+  await expect(flagsSummary.locator('.flags-icon')).toBeVisible();
   await expect(panel).toBeHidden();
   await expect(panel.locator('.flag-controls button.flag-chip')).toHaveCount(supported.length);
 
@@ -264,7 +265,8 @@ test('native pattern flags expose six supported modes and keep Unicode modes mut
     await flagButton(flag).click();
     await expect(flagButton(flag)).toHaveAttribute('aria-pressed', 'false');
   }
-  await expect(flagsSummary.locator('.active-flags')).toHaveText(copy.flagsPlaceholder);
+  await expect(flagsSummary.locator('.active-flags')).toHaveText('');
+  await expect(flagsSummary.locator('.flags-icon')).toBeVisible();
   await expect(flagsSummary).toHaveAttribute('aria-label', `${copy.flagsLabel}: ${copy.noFlags}`);
   await expect.poll(sharedFlags).toBe('');
   await flagsSummary.press('Space');
