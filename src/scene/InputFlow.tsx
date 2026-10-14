@@ -1,55 +1,47 @@
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { useStore } from 'zustand';
-import type { Group } from 'three';
-import type { MachineLayout } from '../layout/pieces.ts';
+import { Vector3 } from 'three';
+import type { Group, Mesh } from 'three';
+import type { MachineLayout, Vec3 } from '../layout/pieces.ts';
 import type { PlaybackStore } from '../playback/store.ts';
 import { letterGlyph, visibleTiles } from './geometry.ts';
 import type { Materials } from './materials.ts';
 import Glyph from './Glyph.tsx';
+import { Ride } from './ride.ts';
+import { holdOffset, inletRoute, letterTripAt, placeOnTrip, restOffset, spinePoints } from './letterTrip.ts';
 
-const CAP = 16;
-const RADIUS = 0.16;
+const RADIUS = 0.18;
+const LIFT = RADIUS - 0.02;
+const HOLD = 8;
+const REST = 18;
+const WORLD_UP = new Vector3(0, 1, 0);
 
-type Role = 'waiting' | 'passed' | 'skipped';
-
-function pieceAt(machine: MachineLayout, kind: string) {
+function pieceAt(machine: MachineLayout, kind: string): Vec3 | null {
   return machine.pieces.find((piece) => piece.kind === kind)?.position ?? null;
 }
 
-function FlowMarble({
+function shift(base: Vec3, offset: Vec3): Vec3 {
+  return { x: base.x + offset.x, y: base.y + offset.y, z: base.z + offset.z };
+}
+
+function LetterMarble({
   glyph,
-  target,
   materials,
+  position,
 }: {
   glyph: string;
-  target: { x: number; y: number; z: number };
   materials: Materials;
+  position: [number, number, number];
 }) {
-  const ref = useRef<Group>(null);
-  const placed = useRef(false);
-  useFrame((_, delta) => {
-    const group = ref.current;
-    if (!group) return;
-    if (!placed.current) {
-      group.position.set(target.x, target.y, target.z);
-      placed.current = true;
-      return;
-    }
-    const step = Math.min(1, delta * 6);
-    group.position.x += (target.x - group.position.x) * step;
-    group.position.y += (target.y - group.position.y) * step;
-    group.position.z += (target.z - group.position.z) * step;
-  });
   return (
-    <group ref={ref}>
+    <group position={position}>
       <mesh castShadow material={materials.marble}>
         <sphereGeometry args={[RADIUS, 20, 20]} />
       </mesh>
       <Glyph
         text={letterGlyph(glyph)}
         position={[0, 0.02, RADIUS + 0.01]}
-        size={0.16}
+        size={0.15}
         width={0.28}
         color="#30362d"
       />
@@ -57,7 +49,70 @@ function FlowMarble({
   );
 }
 
-/** Letters of the test string, waiting at the inlet and collecting once the runner accepts them. */
+function Rider({
+  store,
+  count,
+  index,
+  glyph,
+  spine,
+  hold,
+  rest,
+  materials,
+}: {
+  store: PlaybackStore;
+  count: number;
+  index: number;
+  glyph: string;
+  spine: Vec3[];
+  hold: Vec3;
+  rest: Vec3;
+  materials: Materials;
+}) {
+  const ref = useRef<Group>(null);
+  const ball = useRef<Mesh>(null);
+  const last = useRef<Vector3 | null>(null);
+  useFrame(() => {
+    const group = ref.current;
+    if (!group) return;
+    const { time, duration } = store.getState();
+    const trip = letterTripAt(time, duration, count);
+    if (trip.done || trip.index !== index) {
+      group.visible = false;
+      last.current = null;
+      return;
+    }
+    const at = placeOnTrip(spine, trip.fraction, hold, rest, LIFT);
+    group.visible = true;
+    group.position.set(at.x, at.y, at.z);
+    const sphere = ball.current;
+    const previous = last.current;
+    if (sphere && previous) {
+      const step = new Vector3(at.x, at.y, at.z).sub(previous);
+      const distance = step.length();
+      if (distance > 1e-5 && distance < 2) {
+        const axis = new Vector3().crossVectors(WORLD_UP, step.normalize());
+        if (axis.lengthSq() > 1e-8) sphere.rotateOnWorldAxis(axis.normalize(), distance / RADIUS);
+      }
+    }
+    last.current = previous ? previous.set(at.x, at.y, at.z) : new Vector3(at.x, at.y, at.z);
+  });
+  return (
+    <group ref={ref} position={[hold.x, hold.y, hold.z]}>
+      <mesh ref={ball} castShadow material={materials.marble}>
+        <sphereGeometry args={[RADIUS, 24, 24]} />
+      </mesh>
+      <Glyph
+        text={letterGlyph(glyph)}
+        position={[0, 0.02, RADIUS + 0.01]}
+        size={0.16}
+        width={0.3}
+        color="#30362d"
+      />
+      <pointLight color="#ffd9a8" intensity={3.4} distance={3.2} decay={2} position={[0, 0.55, 0.7]} />
+    </group>
+  );
+}
+
 export default function InputFlow({
   store,
   machine,
@@ -71,42 +126,81 @@ export default function InputFlow({
   unicode: boolean;
   materials: Materials;
 }) {
-  const head = useStore(store, (s) => s.machine?.head ?? 0);
-  const attemptStart = useStore(store, (s) => s.machine?.attemptStart ?? 0);
-  const tiles = useMemo(() => visibleTiles(input, unicode, 64), [input, unicode]);
+  const tiles = useMemo(() => visibleTiles(input, unicode, input.length), [input, unicode]);
+  const ride = useMemo(() => new Ride(machine), [machine]);
+  const spine = useMemo(() => {
+    const ids = inletRoute(machine, 'cup');
+    if (!ids || ids.length < 2) return ids ? spinePoints(machine, ids) : [];
+    const curved = ride.points(ids);
+    return curved.length >= 2 ? curved : spinePoints(machine, ids);
+  }, [machine, ride]);
   const hopper = pieceAt(machine, 'hopper');
   const cup = pieceAt(machine, 'cup');
-  const reject = pieceAt(machine, 'rejectTray');
-  if (!hopper || !cup || !reject) return null;
-
-  const active = tiles.find((tile) => tile.index <= head && head < tile.index + tile.glyph.length);
-  const around = tiles.filter((tile) => Math.abs(tile.index - (active?.index ?? head)) <= 12).slice(0, CAP);
-  let waiting = 0;
-  let passed = 0;
-  let skipped = 0;
-  const placed = around.flatMap((tile) => {
-    if (active && tile.index === active.index) return [];
-    let role: Role = 'waiting';
-    if (attemptStart >= 0 && tile.index < attemptStart) role = 'skipped';
-    else if (tile.index < head) role = 'passed';
-    const slot = role === 'waiting' ? waiting++ : role === 'passed' ? passed++ : skipped++;
-    const base = role === 'waiting' ? hopper : role === 'passed' ? cup : reject;
-    const target =
-      role === 'waiting'
-        ? { x: base.x - 0.7 - slot * 0.4, y: base.y + 0.62, z: base.z + 0.2 }
-        : {
-            x: base.x - 0.42 + (slot % 6) * 0.28,
-            y: base.y + 0.32 + Math.floor(slot / 6) * 0.3,
-            z: base.z,
-          };
-    return [{ index: tile.index, glyph: tile.glyph, target }];
+  const count = tiles.length;
+  const opened = letterTripAt(store.getState().time, store.getState().duration, count);
+  const openedActive = opened.done ? count : opened.index;
+  const [active, setActive] = useState(openedActive);
+  const [done, setDone] = useState(opened.done);
+  const [tracked, setTracked] = useState(count);
+  const seen = useRef({ active: openedActive, done: opened.done, count });
+  if (tracked !== count) {
+    setTracked(count);
+    setActive(openedActive);
+    setDone(opened.done);
+  }
+  useFrame(() => {
+    if (seen.current.count !== count) seen.current = { active: -1, done: false, count };
+    const { time, duration } = store.getState();
+    const trip = letterTripAt(time, duration, count);
+    const next = trip.done ? count : trip.index;
+    if (next === seen.current.active && trip.done === seen.current.done) return;
+    seen.current = { active: next, done: trip.done, count };
+    setActive(next);
+    setDone(trip.done);
   });
+  if (!hopper || !cup || tiles.length === 0) return null;
+  const head = done ? tiles.length : active;
+  const waiting = tiles.slice(head + 1, head + 1 + HOLD);
+  const finished = tiles.slice(0, Math.min(head, REST));
+  const riding = done ? undefined : tiles[head];
 
   return (
     <group>
-      {placed.map((marble) => (
-        <FlowMarble key={marble.index} glyph={marble.glyph} target={marble.target} materials={materials} />
-      ))}
+      {waiting.map((tile, slot) => {
+        const at = shift(hopper, holdOffset(slot + 1));
+        return (
+          <LetterMarble
+            key={tile.index}
+            glyph={tile.glyph}
+            materials={materials}
+            position={[at.x, at.y, at.z]}
+          />
+        );
+      })}
+      {finished.map((tile, order) => {
+        const at = shift(cup, restOffset(order));
+        return (
+          <LetterMarble
+            key={tile.index}
+            glyph={tile.glyph}
+            materials={materials}
+            position={[at.x, at.y, at.z]}
+          />
+        );
+      })}
+      {riding && (
+        <Rider
+          key={riding.index}
+          store={store}
+          count={tiles.length}
+          index={head}
+          glyph={riding.glyph}
+          spine={spine}
+          hold={shift(hopper, holdOffset(0))}
+          rest={shift(cup, restOffset(head))}
+          materials={materials}
+        />
+      )}
     </group>
   );
 }

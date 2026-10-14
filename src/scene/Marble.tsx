@@ -36,6 +36,7 @@ export default function Marble({
   emphasis = 1,
   input = '',
   unicode = false,
+  showBody = true,
 }: {
   store: PlaybackStore;
   machine: MachineLayout;
@@ -43,6 +44,7 @@ export default function Marble({
   emphasis?: number;
   input?: string;
   unicode?: boolean;
+  showBody?: boolean;
 }) {
   const ref = useRef<Group>(null);
   const ball = useRef<Mesh>(null);
@@ -75,8 +77,12 @@ export default function Marble({
   useFrame((state, delta) => {
     store.getState().tick(delta * 1000);
     const snapshot = store.getState();
+    if (snapshot.playing) state.invalidate();
     const group = ref.current;
-    if (!group) return;
+    if (!group || !showBody) {
+      if (group) group.visible = false;
+      return;
+    }
     const riding = snapshot.timeline
       ? carriageAtIndex(machine, snapshot.timeline, snapshot.segmentIndex, snapshot.fraction)
       : null;
@@ -105,7 +111,6 @@ export default function Marble({
       group.visible = false;
       last.current = null;
     }
-    if (snapshot.playing) state.invalidate();
   });
 
   return (
