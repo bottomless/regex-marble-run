@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
+import { useStore } from 'zustand';
 import { Vector3 } from 'three';
 import type { Group, Mesh } from 'three';
 import type { MachineLayout, Vec3 } from '../layout/pieces.ts';
@@ -8,7 +9,15 @@ import { letterGlyph, visibleTiles } from './geometry.ts';
 import type { Materials } from './materials.ts';
 import Glyph from './Glyph.tsx';
 import { Ride } from './ride.ts';
-import { holdOffset, inletRoute, letterTripAt, placeOnTrip, restOffset, spinePoints } from './letterTrip.ts';
+import {
+  holdOffset,
+  inletRoute,
+  letterLands,
+  letterTripAt,
+  placeOnTrip,
+  restOffset,
+  spinePoints,
+} from './letterTrip.ts';
 
 const RADIUS = 0.18;
 const LIFT = RADIUS - 0.02;
@@ -18,6 +27,13 @@ const WORLD_UP = new Vector3(0, 1, 0);
 
 function pieceAt(machine: MachineLayout, kind: string): Vec3 | null {
   return machine.pieces.find((piece) => piece.kind === kind)?.position ?? null;
+}
+
+function spineFor(machine: MachineLayout, ride: Ride, destination: 'cup' | 'rejectTray'): Vec3[] {
+  const ids = inletRoute(machine, destination);
+  if (!ids || ids.length < 2) return ids ? spinePoints(machine, ids) : [];
+  const curved = ride.points(ids);
+  return curved.length >= 2 ? curved : spinePoints(machine, ids);
 }
 
 function shift(base: Vec3, offset: Vec3): Vec3 {
@@ -128,14 +144,17 @@ export default function InputFlow({
 }) {
   const tiles = useMemo(() => visibleTiles(input, unicode, input.length), [input, unicode]);
   const ride = useMemo(() => new Ride(machine), [machine]);
-  const spine = useMemo(() => {
-    const ids = inletRoute(machine, 'cup');
-    if (!ids || ids.length < 2) return ids ? spinePoints(machine, ids) : [];
-    const curved = ride.points(ids);
-    return curved.length >= 2 ? curved : spinePoints(machine, ids);
-  }, [machine, ride]);
+  const spines = useMemo(
+    () => ({ cup: spineFor(machine, ride, 'cup'), rejectTray: spineFor(machine, ride, 'rejectTray') }),
+    [machine, ride],
+  );
   const hopper = pieceAt(machine, 'hopper');
   const cup = pieceAt(machine, 'cup');
+  const reject = pieceAt(machine, 'rejectTray');
+  const matched = useStore(store, (s) => s.result?.matched ?? false);
+  const matchStart = useStore(store, (s) => (s.result?.matched ? s.result.index : -1));
+  const matchEnd = useStore(store, (s) => (s.result?.matched ? s.result.end : -1));
+  const lands = (index: number, length: number) => letterLands(matched, matchStart, matchEnd, index, length);
   const count = tiles.length;
   const opened = letterTripAt(store.getState().time, store.getState().duration, count);
   const openedActive = opened.done ? count : opened.index;
@@ -158,11 +177,18 @@ export default function InputFlow({
     setActive(next);
     setDone(trip.done);
   });
-  if (!hopper || !cup || tiles.length === 0) return null;
+  if (!hopper || !cup || !reject || tiles.length === 0) return null;
   const head = done ? tiles.length : active;
   const waiting = tiles.slice(head + 1, head + 1 + HOLD);
   const finished = tiles.slice(0, Math.min(head, REST));
   const riding = done ? undefined : tiles[head];
+  const ridingLands = riding ? lands(riding.index, riding.glyph.length) : 'rejectTray';
+  let cupOrder = 0;
+  let rejectOrder = 0;
+  const ridingOrder = tiles.slice(0, head).reduce((order, tile) => {
+    return lands(tile.index, tile.glyph.length) === ridingLands ? order + 1 : order;
+  }, 0);
+  const restAt = ridingLands === 'cup' ? cup : reject;
 
   return (
     <group>
@@ -177,8 +203,10 @@ export default function InputFlow({
           />
         );
       })}
-      {finished.map((tile, order) => {
-        const at = shift(cup, restOffset(order));
+      {finished.map((tile) => {
+        const destination = lands(tile.index, tile.glyph.length);
+        const order = destination === 'cup' ? cupOrder++ : rejectOrder++;
+        const at = shift(destination === 'cup' ? cup : reject, restOffset(order, destination));
         return (
           <LetterMarble
             key={tile.index}
@@ -190,14 +218,14 @@ export default function InputFlow({
       })}
       {riding && (
         <Rider
-          key={riding.index}
+          key={`${riding.index}:${ridingLands}`}
           store={store}
           count={tiles.length}
           index={head}
           glyph={riding.glyph}
-          spine={spine}
+          spine={spines[ridingLands]}
           hold={shift(hopper, holdOffset(0))}
-          rest={shift(cup, restOffset(head))}
+          rest={shift(restAt, restOffset(ridingOrder, ridingLands))}
           materials={materials}
         />
       )}

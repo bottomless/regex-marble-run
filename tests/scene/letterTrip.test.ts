@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parsePattern } from '../../src/engine/parse.ts';
 import { layout } from '../../src/layout/layout.ts';
-import { inletRoute, letterTripAt, placeOnTrip, spinePoints } from '../../src/scene/letterTrip.ts';
+import { inletRoute, letterLands, letterTripAt, placeOnTrip, spinePoints } from '../../src/scene/letterTrip.ts';
 
 describe('letter trips', () => {
   it('releases the next letter only after the previous one finishes', () => {
@@ -50,5 +50,31 @@ describe('letter trips', () => {
       const points = spinePoints(machine, ids!);
       expect(points[0].y).toBeGreaterThan(points.at(-1)!.y);
     }
+  });
+
+  it('sends a miss to the reject tray and a hit only for accepted letters', () => {
+    expect(letterLands(false, -1, -1, 0, 1)).toBe('rejectTray');
+    expect(letterLands(true, 4, 7, 0, 1)).toBe('rejectTray');
+    expect(letterLands(true, 4, 7, 4, 1)).toBe('cup');
+    expect(letterLands(true, 4, 7, 6, 1)).toBe('cup');
+    expect(letterLands(true, 4, 7, 7, 1)).toBe('rejectTray');
+
+    const machine = layout(parsePattern('a+', ''));
+    const ids = inletRoute(machine, 'rejectTray');
+    expect(ids).not.toBeNull();
+    const points = spinePoints(machine, ids!);
+    const reject = machine.pieces.find((piece) => piece.kind === 'rejectTray')!.position;
+    const cup = machine.pieces.find((piece) => piece.kind === 'cup')!.position;
+    const kinds = new Set<string>();
+    for (let i = 1; i < ids!.length; i++) {
+      const edge = machine.graph.edges.find((item) => item.from === ids![i - 1] && item.to === ids![i]);
+      if (edge) kinds.add(machine.pieces[edge.piece].kind);
+    }
+    expect(kinds.has('rejectTray')).toBe(true);
+    expect(points.at(-1)!.x).toBeCloseTo(reject.x);
+    expect(Math.hypot(points.at(-1)!.x - cup.x, points.at(-1)!.z - cup.z)).toBeGreaterThan(1);
+    const end = placeOnTrip(points, 1, machine.pieces[0].position, reject, 0.16);
+    expect(end.x).toBeCloseTo(reject.x);
+    expect(end.y).toBeCloseTo(reject.y);
   });
 });
