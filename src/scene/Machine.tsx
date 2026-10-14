@@ -317,7 +317,7 @@ export default function Machine({
       <Base metrics={metrics} materials={materials} label={label} />
       <group ref={building} position={[0, 0.6, 0]} scale={metrics.scale}>
         <group position={metrics.offset}>
-          <Tracks machine={machine} materials={materials} />
+          <Tracks machine={machine} materials={materials} letters={input.length > 0 && !flood} />
           <Gates
             machine={machine}
             materials={materials}

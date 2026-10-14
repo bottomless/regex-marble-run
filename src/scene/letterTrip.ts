@@ -167,6 +167,19 @@ export function inletRoute(
   return scenic(layout, from, to) ?? routePath(layout.graph, from, to);
 }
 
+export function riddenPieces(layout: MachineLayout): Set<number> | null {
+  const ids = new Set<number>();
+  for (const destination of ['cup', 'rejectTray'] as const) {
+    const route = inletRoute(layout, destination);
+    if (!route || route.length < 2) continue;
+    for (let i = 1; i < route.length; i++) {
+      const edge = layout.graph.edges.find((item) => item.from === route[i - 1] && item.to === route[i]);
+      if (edge) ids.add(edge.piece);
+    }
+  }
+  return ids.size > 0 ? ids : null;
+}
+
 export function spinePoints(layout: MachineLayout, ids: number[]): Vec3[] {
   if (ids.length === 0) return [];
   const points: Vec3[] = [];

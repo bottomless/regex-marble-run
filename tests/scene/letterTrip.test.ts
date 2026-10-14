@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parsePattern } from '../../src/engine/parse.ts';
 import { layout } from '../../src/layout/layout.ts';
-import { inletRoute, letterLands, letterTripAt, placeOnTrip, spinePoints } from '../../src/scene/letterTrip.ts';
+import { inletRoute, letterLands, letterTripAt, placeOnTrip, riddenPieces, spinePoints } from '../../src/scene/letterTrip.ts';
 
 describe('letter trips', () => {
   it('releases the next letter only after the previous one finishes', () => {
@@ -76,5 +76,18 @@ describe('letter trips', () => {
     const end = placeOnTrip(points, 1, machine.pieces[0].position, reject, 0.16);
     expect(end.x).toBeCloseTo(reject.x);
     expect(end.y).toBeCloseTo(reject.y);
+  });
+
+  it('leaves the loop return and side chute off the letter ride', () => {
+    const machine = layout(parsePattern('<.+>', ''));
+    const ridden = riddenPieces(machine);
+    expect(ridden).not.toBeNull();
+    const kinds = new Set([...ridden!].map((index) => machine.pieces[index].kind));
+    expect(kinds.has('gate')).toBe(true);
+    expect(kinds.has('rejectTray')).toBe(true);
+    expect(kinds.has('bypassChute')).toBe(false);
+    expect(kinds.has('returnRail')).toBe(false);
+    expect(kinds.has('loopLift')).toBe(false);
+    expect(kinds.has('backLift')).toBe(false);
   });
 });

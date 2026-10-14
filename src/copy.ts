@@ -272,7 +272,7 @@ export const copy = {
     },
     optional: {
       label: 'Optional letter',
-      caption: 'The u has a bypass. The same pattern accepts color and colour.',
+      caption: 'The u is optional. The same pattern accepts color and colour.',
     },
     backreference: {
       label: 'Backreference',
