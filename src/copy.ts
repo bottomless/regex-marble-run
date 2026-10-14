@@ -37,7 +37,7 @@ export const copy = {
   editorHint: 'Edit below. The machine updates as you type.',
   noFlags: 'None',
   emptyInput: 'Empty string',
-  marbleHint: 'Each letter is a marble. One rides from the top to the bottom, then the next starts. A miss ends in Reject.',
+  marbleHint: 'Each letter is a marble. It rides to the gate that tests it. A miss falls into Reject. A match rolls to the cup.',
   controls: 'Pattern and test string controls',
   machine: 'Regular expression machine',
   building: 'Building the machine…',
@@ -164,12 +164,12 @@ export const copy = {
       kind: 'marble',
       label: 'Marble',
       detail:
-        'One marble per letter. They wait at the inlet and ride one at a time. Accepted letters rest in the cup. If the string fails, they end in the reject tray.',
+        'One marble per letter. Each rides to the gate that tests it. A miss falls aside into Reject. Letters in the match roll to the cup. Untested letters stay at the inlet.',
     },
     {
       kind: 'gate',
       label: 'Gate',
-      detail: 'A brass arch that reads one character or class. Rejected marbles turn back.',
+      detail: 'A brass arch that reads one character or class. A miss falls aside; a pass waits at the gate.',
     },
     {
       kind: 'fork',

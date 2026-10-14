@@ -1,29 +1,32 @@
 import { useEffect, useMemo } from 'react';
+import { useStore } from 'zustand';
 import type { MachineLayout } from '../layout/pieces.ts';
+import type { PlaybackStore } from '../playback/store.ts';
+import type { Timeline } from '../playback/timeline.ts';
 import { buildTrackBatches } from './geometry.ts';
-import { riddenPieces } from './letterTrip.ts';
+import { hiddenLoopPieces } from './letterCast.ts';
 import type { Materials } from './materials.ts';
 
 export default function Tracks({
   machine,
   materials,
-  letters = false,
+  timeline,
 }: {
   machine: MachineLayout;
   materials: Materials;
-  letters?: boolean;
+  timeline?: Timeline | null;
 }) {
   const batches = useMemo(() => {
-    if (!letters) return buildTrackBatches(machine);
-    const ridden = riddenPieces(machine);
-    if (!ridden) return buildTrackBatches(machine);
+    if (timeline === undefined) return buildTrackBatches(machine);
+    const hidden = hiddenLoopPieces(machine, timeline);
+    if (hidden.size === 0) return buildTrackBatches(machine);
     return buildTrackBatches({
       ...machine,
       pieces: machine.pieces.map((piece, index) =>
-        piece.points && !ridden.has(index) ? { ...piece, points: undefined } : piece,
+        piece.points && hidden.has(index) ? { ...piece, points: undefined } : piece,
       ),
     });
-  }, [letters, machine]);
+  }, [timeline, machine]);
   useEffect(() => () => batches.forEach((batch) => batch.geometry.dispose()), [batches]);
   return (
     <group>
@@ -38,4 +41,17 @@ export default function Tracks({
       ))}
     </group>
   );
+}
+
+export function LetterTracks({
+  store,
+  machine,
+  materials,
+}: {
+  store: PlaybackStore;
+  machine: MachineLayout;
+  materials: Materials;
+}) {
+  const timeline = useStore(store, (s) => s.timeline);
+  return <Tracks machine={machine} materials={materials} timeline={timeline} />;
 }

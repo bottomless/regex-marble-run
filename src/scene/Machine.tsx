@@ -13,7 +13,7 @@ import { copy } from '../copy.ts';
 import { displayMetrics, visibleTiles } from './geometry.ts';
 import type { DisplayMetrics } from './geometry.ts';
 import type { Materials } from './materials.ts';
-import Tracks from './Tracks.tsx';
+import Tracks, { LetterTracks } from './Tracks.tsx';
 import Gates from './Gates.tsx';
 import Pieces from './Pieces.tsx';
 import Glyph from './Glyph.tsx';
@@ -317,7 +317,15 @@ export default function Machine({
       <Base metrics={metrics} materials={materials} label={label} />
       <group ref={building} position={[0, 0.6, 0]} scale={metrics.scale}>
         <group position={metrics.offset}>
-          <Tracks machine={machine} materials={materials} letters={input.length > 0 && !flood} />
+          {input.length > 0 && !flood ? (
+            store ? (
+              <LetterTracks store={store} machine={machine} materials={materials} />
+            ) : (
+              <Tracks machine={machine} materials={materials} timeline={null} />
+            )
+          ) : (
+            <Tracks machine={machine} materials={materials} />
+          )}
           <Gates
             machine={machine}
             materials={materials}
