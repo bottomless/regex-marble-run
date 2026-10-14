@@ -31,7 +31,14 @@ function nativeTime(reading: NativeReading): string {
 export const copy = {
   brand: 'Regex Marble Run',
   edition: 'REGEX / WORKSHOP 04',
-  descriptor: 'A little machine for a regular expression.',
+  descriptor: 'See how a regex finds a match.',
+  guide: 'Guide',
+  editorTitle: 'Your expression',
+  editorHint: 'Edit below. The machine updates as you type.',
+  aboutExample: 'About this example',
+  noFlags: 'None',
+  emptyInput: 'Empty string',
+  marbleHint: 'Each marble is a match attempt. Gates test characters; loops try them again.',
   controls: 'Pattern and test string controls',
   machine: 'Regular expression machine',
   building: 'Building the machine…',
@@ -43,13 +50,14 @@ export const copy = {
     input: 'INPUT / UTF-16',
     more: 'more tiles',
     activeBranch: 'ACTIVE',
-    savedBranch: (count: number) => count === 1 ? 'SAVED' : `SAVED ×${count}`,
+    savedBranch: (count: number) => (count === 1 ? 'SAVED' : `SAVED ×${count}`),
     loopAgain: 'AGAIN',
     loopExit: 'EXIT',
     loopCount: (count: number) => `×${count}`,
     savedLoop: (choice: 'again' | 'exit', count: number) =>
       `${choice === 'again' ? 'AGAIN' : 'EXIT'} SAVED${count === 1 ? '' : ` ×${count}`}`,
     matchSpan: (start: number, end: number) => `MATCH @${start}..${end}`,
+    modules: 'Expand modules',
     expand: 'Click a module to expand it.',
     expandModule: (label: string) => `Expand module ${label}`,
     error: 'The 3D view could not be opened. The layout is shown below.',
@@ -58,7 +66,8 @@ export const copy = {
     tooLarge: 'This pattern is too large to build. Try a smaller section.',
   },
   flood: {
-    perMarble: (n: number) => (n === 1 ? '1 marble = 1 backtrack' : `1 marble = ${n.toLocaleString('en-US')} backtracks`),
+    perMarble: (n: number) =>
+      n === 1 ? '1 marble = 1 backtrack' : `1 marble = ${n.toLocaleString('en-US')} backtracks`,
     backtracks: (n: number) => `${n.toLocaleString('en-US')} backtracks`,
     steps: (n: number, gaveUp: boolean) => `${n.toLocaleString('en-US')} steps${gaveUp ? ' · gave up' : ''}`,
     column: (depth: number) => `peak ×${depth.toLocaleString('en-US')}`,
@@ -67,7 +76,7 @@ export const copy = {
   split: {
     label: 'View mode',
     single: 'Single',
-    sideBySide: 'Side by side',
+    sideBySide: 'Compare engines',
     left: 'Backtracking',
     leftEngines: 'JavaScript, Python, Java, PCRE',
     right: 'Linear time',
@@ -83,17 +92,23 @@ export const copy = {
       if (right <= 0 || left <= 0) return 'Counting…';
       const more = Math.max(left, right) / Math.min(left, right);
       if (more < 1.005) return 'Same number of steps';
-      const text = more >= 100 ? Math.round(more).toLocaleString('en-US') : more >= 10 ? more.toFixed(1) : more.toFixed(2);
+      const text =
+        more >= 100
+          ? Math.round(more).toLocaleString('en-US')
+          : more >= 10
+            ? more.toFixed(1)
+            : more.toFixed(2);
       return `${left >= right ? 'Backtracking' : 'Linear time'} takes ${text}× the steps`;
     },
   },
   hud: {
     label: 'Run results',
+    details: 'Details',
     labels: {
       steps: 'Steps',
       backtracks: 'Backtracks',
       attempts: 'Attempts',
-      flags: 'Flags (stack depth)',
+      flags: 'Saved choices',
       native: 'Native time',
       result: 'Result',
     },
@@ -125,42 +140,78 @@ export const copy = {
     module: (text: string) => `Module ${text}`,
   },
   editToBuild: 'Adjust the pattern to build the machine.',
-  presetsLabel: 'Try a preset',
+  presetsLabel: 'Example',
   customPreset: 'Your own pattern',
   customCaption: 'Change a gate, add a fork, or make a loop. The machine rebuilds as you type.',
   source: 'Original postmortem',
   patternLabel: 'Pattern',
   patternHint: 'JavaScript regular expression, without the surrounding slashes.',
   inputLabel: 'Test string',
-  flagsLabel: 'Flags',
+  flagsLabel: 'Regex flags',
   unicodeHint: 'u and v are mutually exclusive.',
-  expandControls: 'Edit pattern and string',
-  collapseControls: 'Fold controls',
+  expandControls: 'Edit',
+  collapseControls: 'Done',
   resetView: 'Reset view',
   sheetClose: 'Close',
   share: {
     copyLink: 'Copy link',
-    copied: 'Link copied. It restores the pattern, string, flags and view.',
+    copied: 'Link copied.',
     failed: 'Copy failed. The address bar already holds this link.',
   },
   legendLabel: 'Machine pieces',
   legendTitle: 'How to read the machine',
   legendSheet: [
-    { kind: 'marble', label: 'Marble', detail: 'One marble per match attempt. It enters on the left and rides the track.' },
-    { kind: 'gate', label: 'Gate', detail: 'A brass arch that reads one character or class. Rejected marbles turn back.' },
-    { kind: 'fork', label: 'Diverter', detail: 'Chooses a branch for | or a way through a group. The lever shows the current branch.' },
-    { kind: 'loop', label: 'Loop diverter', detail: 'Greedy loops try another round first; lazy loops try the exit first.' },
-    { kind: 'capture', label: 'Capture frame', detail: 'Frames a group. Brackets on the tile rail show what it caught.' },
-    { kind: 'sensor', label: 'Sensor', detail: 'Checks a position (^, $, \\b, \\B) without reading a character.' },
-    { kind: 'mirror', label: 'Mirror', detail: 'A backreference. Asks for the same characters its capture caught.' },
-    { kind: 'scout', label: 'Scout', detail: 'A lookahead. A small marble runs a side track, reports back, and reads nothing.' },
-    { kind: 'flag', label: 'Flag', detail: 'A saved choice. Backtracking pops the last flag and tries the next option.' },
+    {
+      kind: 'marble',
+      label: 'Marble',
+      detail: 'One marble per match attempt. It enters on the left and rides the track.',
+    },
+    {
+      kind: 'gate',
+      label: 'Gate',
+      detail: 'A brass arch that reads one character or class. Rejected marbles turn back.',
+    },
+    {
+      kind: 'fork',
+      label: 'Diverter',
+      detail: 'Chooses a branch for | or a way through a group. The lever shows the current branch.',
+    },
+    {
+      kind: 'loop',
+      label: 'Loop diverter',
+      detail: 'Greedy loops try another round first; lazy loops try the exit first.',
+    },
+    {
+      kind: 'capture',
+      label: 'Capture frame',
+      detail: 'Frames a group. Brackets on the tile rail show what it caught.',
+    },
+    {
+      kind: 'sensor',
+      label: 'Sensor',
+      detail: 'Checks a position (^, $, \\b, \\B) without reading a character.',
+    },
+    {
+      kind: 'mirror',
+      label: 'Mirror',
+      detail: 'A backreference. Asks for the same characters its capture caught.',
+    },
+    {
+      kind: 'scout',
+      label: 'Scout',
+      detail: 'A lookahead. A small marble runs a side track, reports back, and reads nothing.',
+    },
+    {
+      kind: 'flag',
+      label: 'Flag',
+      detail: 'A saved choice. Backtracking pops the last flag and tries the next option.',
+    },
   ],
   howItWorksTitle: 'How it works',
   howItWorks: [
     {
       heading: 'What a step is',
-      body: 'Every gate test, sensor check, diverter choice and loop round counts as one step. The transport at the bottom scrubs through them; the HUD counts them. The trace log lists each step as a plain sentence.',
+      body: 'A step is one test or choice. Press Play to follow the marble, or use the arrows to move one step at a time. Drag the timeline to revisit a moment. Open Trace log to read what happened.',
     },
     {
       heading: 'What the flags mean',
@@ -172,16 +223,17 @@ export const copy = {
     },
     {
       heading: 'Why linear-time engines do not',
-      body: 'RE2, Go and Rust advance every live thread together, one tile per tick, and never revisit a position. Side-by-side mode runs both machines on the same pattern and counts the steps on each side. The contrast is the point of the exhibit.',
+      body: 'RE2, Go and Rust advance every live thread together, one tile per tick, and never revisit a position. The same pattern that floods this machine runs in time proportional to the string length there.',
     },
     {
       heading: 'Limits',
-      body: 'Lookbehind is shown as a black box: it runs, but its inner track is not drawn. v-flag string classes are not supported. In side-by-side mode, capture contents can differ between the two engines on patterns with empty loops; the match span always agrees.',
+      body: 'Lookbehind is shown as a black box: it runs, but its inner track is not drawn. v-flag string classes are not supported.',
     },
   ],
-  credits: 'Parsing by regexpp. Rendering by three.js and React Three Fiber. The linear-time idea is Russ Cox’s “Regular Expression Matching Can Be Simple And Fast”.',
+  credits:
+    'Parsing by regexpp. Rendering by three.js and React Three Fiber. The linear-time idea is Russ Cox’s “Regular Expression Matching Can Be Simple And Fast”.',
   creditsLink: 'Read the article',
-  orbitPointer: 'Drag to orbit · Right-drag or two fingers to pan / zoom',
+  orbitPointer: 'Drag to rotate · Scroll or pinch to zoom',
   orbitKeyboard: 'Arrows orbit · Shift + arrows pan · + / − zoom',
   reducedMotion: 'Reduced motion',
   syntax: { slash: '/', caret: '^' },
@@ -210,11 +262,11 @@ export const copy = {
       caption: 'A gate for c, a fork for a or o, and a gate for t. The test string is the cot.',
     },
     greedy: {
-      label: 'Greedy vs lazy · greedy',
+      label: 'Greedy matching',
       caption: 'The greedy loop tries another character before its exit. <.+> can span both tags.',
     },
     lazy: {
-      label: 'Greedy vs lazy · lazy',
+      label: 'Lazy matching',
       caption:
         'The lazy loop tries its exit before another character. <.+?> can stop at the first closing bracket.',
     },
@@ -271,7 +323,8 @@ export const copy = {
     gatePass: (pos: number, label: string, ch: string) => `pos ${pos} · gate ${label} vs ${ch} → passes`,
     gateReject: (pos: number, label: string, ch: string) => `pos ${pos} · gate ${label} vs ${ch} → rejected`,
     mirrorPass: (pos: number, label: string, ch: string) => `pos ${pos} · mirror ${label} vs ${ch} → same`,
-    mirrorReject: (pos: number, label: string, ch: string) => `pos ${pos} · mirror ${label} vs ${ch} → different`,
+    mirrorReject: (pos: number, label: string, ch: string) =>
+      `pos ${pos} · mirror ${label} vs ${ch} → different`,
     sensorHold: (pos: number, label: string) => `pos ${pos} · sensor ${label} → holds`,
     sensorFail: (pos: number, label: string) => `pos ${pos} · sensor ${label} → fails`,
     opaquePass: (pos: number, label: string) => `pos ${pos} · black box ${label} → passes`,
@@ -314,7 +367,7 @@ export const copy = {
     stepBack: 'Step back one event',
     stepForward: 'Step forward one event',
     speed: 'Playback speed',
-    speedOption: (speed: number) => speed === Infinity ? 'Instant' : `${speed}×`,
+    speedOption: (speed: number) => (speed === Infinity ? 'Instant' : `${speed}×`),
     scrubber: 'Timeline scrubber',
     stepCount: (current: number, total: number) => `Event ${current} of ${total}`,
   },

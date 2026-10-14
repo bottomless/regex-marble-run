@@ -2,8 +2,6 @@ import { expect, test, type Page } from '@playwright/test';
 import { copy } from '../../src/copy.ts';
 import { parsePattern } from '../../src/engine/parse.ts';
 import { runBacktrack } from '../../src/engine/backtrack.ts';
-import { runPike } from '../../src/engine/pikevm.ts';
-import { buildLinearRun } from '../../src/playback/linear.ts';
 import { T } from '../../src/engine/trace.ts';
 import { buildCounters, countersAt } from '../../src/playback/counters.ts';
 import { floodAt, floodModel } from '../../src/playback/flood.ts';
@@ -34,7 +32,10 @@ async function selectPreset(page: Page, id: string) {
   await page.locator(`[data-preset-id="${id}"]`).click();
 }
 
-test('playback, HUD, highlighting, trace log drawer and info sheets in the WebGL machine', async ({ page, context }) => {
+test('playback, HUD, highlighting, trace log drawer and info sheets in the WebGL machine', async ({
+  page,
+  context,
+}) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const errors = collectErrors(page);
   const external: string[] = [];
@@ -52,7 +53,9 @@ test('playback, HUD, highlighting, trace log drawer and info sheets in the WebGL
   await expect(canvas).toHaveCount(1);
   await expect(canvas).toHaveAttribute('data-pattern', PRESETS[0].pattern);
   await expect(page.locator('#test-string')).toHaveValue(PRESETS[0].input);
-  expect(await canvas.evaluate((el) => (el as HTMLCanvasElement).getContext('webgl2')?.isContextLost())).toBe(false);
+  expect(await canvas.evaluate((el) => (el as HTMLCanvasElement).getContext('webgl2')?.isContextLost())).toBe(
+    false,
+  );
   await expect(page.locator('.scene-fallback:visible')).toHaveCount(0);
 
   // Preset sheet selection
@@ -66,7 +69,14 @@ test('playback, HUD, highlighting, trace log drawer and info sheets in the WebGL
 
   await expect(transport).toHaveAttribute('data-event-count', String(trace.length));
   await expect(transport).toHaveAttribute('data-event-index', '0');
-  for (const label of Object.values(copy.hud.labels)) await expect(hud.locator('dt', { hasText: label })).toHaveCount(1);
+  for (const label of Object.values(copy.hud.labels))
+    await expect(hud.locator('dt', { hasText: label })).toHaveCount(1);
+  const details = hud.locator('.hud-details');
+  await expect(details).toHaveJSProperty('open', false);
+  await expect(hud.locator('[data-field="native"]')).toBeHidden();
+  for (const field of ['result', 'steps', 'backtracks']) {
+    await expect(hud.locator(`[data-field="${field}"]`)).toBeVisible();
+  }
 
   // Stepping controls
   const stepForward = transport.getByRole('button', { name: copy.transport.stepForward });
@@ -84,13 +94,28 @@ test('playback, HUD, highlighting, trace log drawer and info sheets in the WebGL
   await expect(transport).toHaveAttribute('data-at-start', 'true');
 
   // Instant finish
-  const instant = transport.getByRole('button', { name: `${copy.transport.speed} ${copy.transport.speedOption(INSTANT)}`, exact: true });
-  await instant.click();
+  const speed = transport.getByRole('combobox', { name: copy.transport.speed, exact: true });
+  await speed.selectOption(String(INSTANT));
+  await expect(speed).toHaveValue(String(INSTANT));
+  await expect(transport).toHaveAttribute('data-speed', String(INSTANT));
   await expect(transport).toHaveAttribute('data-at-end', 'true');
   await expect(hud).toHaveAttribute('data-result', 'match');
-  await expect(hud.locator('[data-field="result"] dd')).toHaveText(copy.hud.result({ kind: 'match', start: result.index, end: result.end }));
+  await expect(hud.locator('[data-field="result"] dd')).toContainText(
+    copy.hud.result({ kind: 'match', start: result.index, end: result.end }),
+  );
+  const matched = copy.hud.matched(greedy.input.slice(result.index, result.end));
+  await expect(hud.locator('.hud-summary-match')).toHaveText(matched);
   await expect(canvas).toHaveAttribute('data-captures', JSON.stringify(captureSpans(final)));
   await expect(canvas).toHaveAttribute('data-match', JSON.stringify(matchSpan(final)));
+  await details.locator('summary').focus();
+  await details.locator('summary').press('Enter');
+  await expect(details).toHaveJSProperty('open', true);
+  await expect(hud.locator('[data-field="native"]')).toBeVisible();
+  await expect(hud.locator('.hud-match-text')).toHaveText(matched);
+  await details.locator('summary').press('Space');
+  await expect(details).toHaveJSProperty('open', false);
+  await expect(hud.locator('[data-field="native"]')).toBeHidden();
+  await expect(hud.locator('.hud-summary-match')).toBeVisible();
 
   // Pattern hover highlighting
   const patternInput = page.locator('#pattern');
@@ -113,23 +138,217 @@ test('playback, HUD, highlighting, trace log drawer and info sheets in the WebGL
   await page.keyboard.press('Escape');
   await expect(drawer).toHaveCount(0);
 
-  // Legend and How it works sheets
-  await page.getByRole('button', { name: copy.legendTitle }).click();
-  const legend = page.getByRole('dialog', { name: copy.legendTitle });
-  await expect(legend).toBeVisible();
-  await expect(legend.locator('.legend-art')).toHaveCount(copy.legendSheet.length);
+  const guideButton = page.getByRole('button', { name: copy.guide, exact: true });
+  await expect(guideButton).toHaveCount(1);
+  await expect(page.getByRole('button', { name: copy.legendTitle, exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: copy.howItWorksTitle, exact: true })).toHaveCount(0);
+  await guideButton.click();
+  const guide = page.getByRole('dialog', { name: copy.guide, exact: true });
+  const pieces = guide.locator('.guide-tabs').getByRole('button', { name: copy.legendLabel, exact: true });
+  const how = guide.locator('.guide-tabs').getByRole('button', { name: copy.howItWorksTitle, exact: true });
+  await expect(guide).toBeVisible();
+  await expect(guide.getByRole('button', { name: copy.sheetClose, exact: true })).toBeFocused();
+  await expect(guide.locator('.guide-tabs button')).toHaveCount(2);
+  await expect(pieces).toHaveAttribute('aria-pressed', 'true');
+  await expect(how).toHaveAttribute('aria-pressed', 'false');
+  await expect(guide.locator('.legend-art')).toHaveCount(copy.legendSheet.length);
   await page.keyboard.press('Escape');
-  await expect(legend).toHaveCount(0);
+  await expect(guide).toHaveCount(0);
+  await expect(guideButton).toBeFocused();
 
-  await page.getByRole('button', { name: copy.howItWorksTitle }).click();
-  const how = page.getByRole('dialog', { name: copy.howItWorksTitle });
-  await expect(how).toBeVisible();
-  await expect(how).toContainText('backtracking');
+  await guideButton.click();
+  await how.click();
+  await expect(how).toHaveAttribute('aria-pressed', 'true');
+  await expect(pieces).toHaveAttribute('aria-pressed', 'false');
+  await expect(guide.locator('.legend-art')).toHaveCount(0);
+  await expect(guide.locator('.how-body')).toContainText('backtracking');
+  for (const section of copy.howItWorks) {
+    await expect(guide.getByRole('heading', { name: section.heading, exact: true })).toBeVisible();
+  }
+  await pieces.click();
+  await expect(pieces).toHaveAttribute('aria-pressed', 'true');
+  await expect(how).toHaveAttribute('aria-pressed', 'false');
+  await expect(guide.locator('.legend-art')).toHaveCount(copy.legendSheet.length);
+  await how.click();
   await page.keyboard.press('Escape');
-  await expect(how).toHaveCount(0);
+  await expect(guide).toHaveCount(0);
+  await expect(guideButton).toBeFocused();
 
   expect(errors).toEqual([]);
   expect(external).toEqual([]);
+});
+
+test('native editor disclosures expose six supported flags and keep Unicode modes mutually exclusive', async ({
+  page,
+}) => {
+  const errors = collectErrors(page);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  await openControls(page);
+  const options = page.locator('.editor-options');
+  const flagsSummary = page.locator('.editor-options > summary');
+  const note = page.locator('.preset-note');
+  const noteSummary = page.locator('.preset-note > summary');
+  const supported = ['i', 'm', 's', 'u', 'v', 'y'] as const;
+  const flagButton = (flag: (typeof supported)[number]) =>
+    options.getByRole('button', { name: copy.flagLabel(flag, copy.flags[flag]), exact: true });
+  const sharedFlags = () =>
+    decodeShare(new URL(page.url()).hash, { pattern: '', flags: '', input: '', mode: 'single' })?.flags;
+
+  await expect(options).toHaveJSProperty('open', false);
+  await expect(flagsSummary).toContainText(copy.flagsLabel);
+  await expect(flagsSummary.locator('.active-flags')).toHaveText(copy.noFlags);
+  await expect(options.locator('.flag-controls')).toBeHidden();
+  await expect(options.locator('.flag-chip')).toHaveCount(supported.length);
+  await expect(note).toHaveJSProperty('open', false);
+  await expect(noteSummary).toHaveText(copy.aboutExample);
+  await expect(note.locator('p')).toHaveText(PRESETS[0].caption);
+  await expect(note.locator('p')).toBeHidden();
+  await noteSummary.press('Enter');
+  await expect(note).toHaveJSProperty('open', true);
+  await expect(note.locator('p')).toBeVisible();
+  await noteSummary.press('Space');
+  await expect(note).toHaveJSProperty('open', false);
+  await expect(note.locator('p')).toBeHidden();
+
+  await flagsSummary.click();
+  await expect(options).toHaveJSProperty('open', true);
+  await expect(options.getByRole('button')).toHaveCount(supported.length);
+  for (const flag of supported) {
+    await expect(flagButton(flag)).toBeVisible();
+    await expect(flagButton(flag)).toBeEnabled();
+    await expect(flagButton(flag)).toHaveAttribute('aria-pressed', 'false');
+  }
+  await expect(options.getByRole('button', { name: /^g:/ })).toHaveCount(0);
+  await expect(options.getByRole('button', { name: /^d:/ })).toHaveCount(0);
+  await expect(options.locator('#unicode-hint')).toHaveText(copy.unicodeHint);
+  for (const flag of ['i', 'm', 's', 'y'] as const) {
+    await flagButton(flag).click();
+    await expect(flagButton(flag)).toHaveAttribute('aria-pressed', 'true');
+  }
+  for (const flag of ['u', 'v', 'u'] as const) {
+    await flagButton(flag).click();
+    await expect(flagButton(flag)).toHaveAttribute('aria-pressed', 'true');
+    await expect(flagButton(flag === 'u' ? 'v' : 'u')).toHaveAttribute('aria-pressed', 'false');
+    await expect(options.locator('.flag-chip[aria-pressed="true"]')).toHaveCount(5);
+    await expect(flagsSummary.locator('.active-flags')).toHaveText(`ims${flag}y`);
+    await expect.poll(sharedFlags).toBe(`ims${flag}y`);
+    await expect(page.locator('#pattern-error')).toHaveCount(0);
+  }
+  await flagsSummary.click();
+  await expect(options).toHaveJSProperty('open', false);
+  await expect(options.locator('.flag-controls')).toBeHidden();
+  await expect(flagsSummary.locator('.active-flags')).toHaveText('imsuy');
+  await flagsSummary.press('Enter');
+  await expect(options).toHaveJSProperty('open', true);
+  await expect(flagButton('u')).toHaveAttribute('aria-pressed', 'true');
+  await expect(flagButton('v')).toHaveAttribute('aria-pressed', 'false');
+  for (const flag of ['i', 'm', 's', 'u', 'y'] as const) {
+    await flagButton(flag).click();
+    await expect(flagButton(flag)).toHaveAttribute('aria-pressed', 'false');
+  }
+  await expect(flagsSummary.locator('.active-flags')).toHaveText(copy.noFlags);
+  await expect.poll(sharedFlags).toBe('');
+  await flagsSummary.press('Space');
+  await expect(options).toHaveJSProperty('open', false);
+  await expect(options.locator('.flag-controls')).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
+test('desktop grid separates the editor, canvas, HUD and playback without horizontal overflow', async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  await expect(page.locator('canvas')).toHaveAttribute('data-pattern', PRESETS[0].pattern);
+  await expect(page.locator('.control-island')).toHaveAttribute('data-expanded', 'true');
+  await expect(page.locator('#control-fields')).toBeVisible();
+  await expect(page.getByTestId('hud').locator('.hud-details')).toHaveJSProperty('open', false);
+
+  for (const viewport of [
+    { width: 1440, height: 900 },
+    { width: 1024, height: 768 },
+  ]) {
+    await page.setViewportSize(viewport);
+    for (const expanded of [false, true]) {
+      if (expanded) {
+        await page.locator('.editor-options > summary').click();
+        await page.locator('.preset-note > summary').click();
+      }
+      await expect(page.locator('.editor-options')).toHaveJSProperty('open', expanded);
+      await expect(page.locator('.preset-note')).toHaveJSProperty('open', expanded);
+      const selectors = [
+        '.brand-header',
+        '.control-island',
+        '.workshop-stage',
+        'canvas',
+        '.hud',
+        '.playback-dock',
+      ];
+      const boxes = await Promise.all(selectors.map((selector) => page.locator(selector).boundingBox()));
+      for (const [index, box] of boxes.entries()) {
+        expect(box, selectors[index]).not.toBeNull();
+        expect(box!.width, selectors[index]).toBeGreaterThan(0);
+        expect(box!.height, selectors[index]).toBeGreaterThan(0);
+        expect(box!.x, selectors[index]).toBeGreaterThanOrEqual(0);
+        expect(box!.x + box!.width, selectors[index]).toBeLessThanOrEqual(viewport.width);
+      }
+      const [header, editor, stage, canvas, hud, dock] = boxes.map((box) => box!);
+      expect(header.y + header.height).toBeLessThanOrEqual(editor.y);
+      expect(header.y + header.height).toBeLessThanOrEqual(stage.y);
+      expect(editor.x + editor.width).toBeLessThanOrEqual(stage.x);
+      for (const box of [canvas, hud, dock]) {
+        expect(box.x).toBeGreaterThanOrEqual(stage.x);
+        expect(box.x + box.width).toBeLessThanOrEqual(stage.x + stage.width);
+      }
+      expect(canvas.y + canvas.height).toBeLessThanOrEqual(hud.y);
+      expect(hud.y + hud.height).toBeLessThanOrEqual(dock.y);
+      for (const selector of ['.transport-group', '.transport-scrubber', '.transport-speeds']) {
+        const box = (await page.locator(selector).boundingBox())!;
+        expect(box, selector).not.toBeNull();
+        expect(box.width, selector).toBeGreaterThan(0);
+        expect(box.height, selector).toBeGreaterThan(0);
+        expect(box.x, selector).toBeGreaterThanOrEqual(dock.x);
+        expect(box.x + box.width, selector).toBeLessThanOrEqual(dock.x + dock.width);
+        expect(box.y, selector).toBeGreaterThanOrEqual(dock.y);
+        expect(box.y + box.height, selector).toBeLessThanOrEqual(dock.y + dock.height);
+      }
+      expect(
+        await page.evaluate(
+          () =>
+            Math.max(document.body.scrollWidth, document.documentElement.scrollWidth) -
+            document.documentElement.clientWidth,
+        ),
+      ).toBeLessThanOrEqual(0);
+      if (expanded) {
+        await page.locator('.preset-note > summary').click();
+        await page.locator('.editor-options > summary').click();
+      }
+    }
+  }
+});
+
+test('capture details stay inside a short viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 800, height: 600 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto(
+    `/${encodeShare({ pattern: '(a)'.repeat(8), input: 'a'.repeat(8), flags: '', mode: 'single' })}`,
+  );
+  await expect(page.locator('canvas')).toHaveAttribute('data-pattern', '(a)'.repeat(8));
+  await page.getByRole('combobox', { name: copy.transport.speed }).selectOption(String(INSTANT));
+  const hud = page.getByTestId('hud');
+  await expect(hud).toHaveAttribute('data-result', 'match');
+  await hud.locator('.hud-details > summary').click();
+  const panel = hud.locator('.hud-detail-panel');
+  await expect(panel).toBeVisible();
+  await expect(hud.locator('.hud-groups li')).toHaveCount(8);
+  for (const height of [600, 560]) {
+    await page.setViewportSize({ width: 800, height });
+    await expect.poll(async () => (await panel.boundingBox())!.y).toBeGreaterThanOrEqual(0);
+    const box = (await panel.boundingBox())!;
+    expect(box.y + box.height).toBeLessThanOrEqual(height);
+    await expect(hud.locator('[data-field="attempts"]')).toBeInViewport();
+  }
 });
 
 test('catastrophic presets flood with exact sampled tank and gave-up totals', async ({ page }) => {
@@ -170,46 +389,40 @@ test('catastrophic presets flood with exact sampled tank and gave-up totals', as
   expect(errors).toEqual([]);
 });
 
-test('side-by-side mode runs linear engine and URL hash round-trips state', async ({ page, context }) => {
+test('machine always runs in single view and URL hash round-trips state', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const errors = collectErrors(page);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
   await openControls(page);
   const canvas = page.locator('canvas');
-  const single = page.getByRole('button', { name: copy.split.single, exact: true });
-  const split = page.getByRole('button', { name: copy.split.sideBySide, exact: true });
 
-  await split.click();
-  await expect(split).toHaveAttribute('aria-pressed', 'true');
-  await expect(canvas).toHaveAttribute('data-linear', 'ready', { timeout: 15_000 });
+  await expect(canvas).toHaveAttribute('data-linear', 'off');
+  await expect(page.getByRole('button', { name: copy.split.single, exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: copy.split.sideBySide, exact: true })).toHaveCount(0);
+  await expect(page.locator('.stage-toolbar h2')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: copy.resetView, exact: true })).toBeVisible();
 
-  const first = PRESETS[0];
-  const program = parsePattern(first.pattern, first.flags);
-  const pike = runPike(program, first.input);
-  const linear = buildLinearRun(program, pike.trace, pike.result);
-  await expect(canvas).toHaveAttribute('data-linear-ticks', String(linear.ticks.length));
-  await expect(canvas).toHaveAttribute('data-linear-steps', String(linear.steps));
-
-  // Backreference makes linear-time unavailable
   const backref = PRESETS.find((p) => p.id === 'backreference')!;
   await selectPreset(page, backref.id);
   await expect(canvas).toHaveAttribute('data-pattern', backref.pattern);
-  await expect(split).toBeDisabled();
-  await expect(single).toHaveAttribute('aria-pressed', 'true');
   await expect(canvas).toHaveAttribute('data-linear', 'off');
-  await expect(page.locator('.mode-note')).toContainText('RE2');
+  await expect(page.locator('.mode-note')).toHaveCount(0);
 
-  // URL hash sharing
+  // URL hash sharing: a legacy split link still opens in single view
   const shared = { pattern: '[a-z]+', flags: 'i', input: 'test string', mode: 'split' as const };
   await page.goto(`/${encodeShare(shared)}`);
   await openControls(page);
   await expect(page.locator('#pattern')).toHaveValue(shared.pattern);
   await expect(page.locator('#test-string')).toHaveValue(shared.input);
+  await expect(canvas).toHaveAttribute('data-linear', 'off');
   await page.getByRole('button', { name: copy.share.copyLink }).click();
   await expect(page.locator('.share-status')).toHaveText(copy.share.copied);
   const url = await page.evaluate(() => navigator.clipboard.readText());
-  expect(decodeShare(new URL(url).hash, { pattern: '', flags: '', input: '', mode: 'single' })).toEqual(shared);
+  expect(decodeShare(new URL(url).hash, { pattern: '', flags: '', input: '', mode: 'single' })).toEqual({
+    ...shared,
+    mode: 'single',
+  });
 
   expect(errors).toEqual([]);
 });

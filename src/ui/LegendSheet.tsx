@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { copy } from '../copy.ts';
 import Sheet from './Sheet.tsx';
+import HowItWorks from './HowItWorks.tsx';
 
 type LegendKind = (typeof copy.legendSheet)[number]['kind'];
 
@@ -74,29 +76,43 @@ function LegendArt({ kind }: { kind: LegendKind }) {
   );
 }
 
-/** “How to read the machine”: an illustrated glossary of every piece on the board. */
 export default function LegendSheet({ onClose }: { onClose: () => void }) {
+  const [section, setSection] = useState<'pieces' | 'how'>('pieces');
   return (
-    <Sheet label={copy.legendTitle} onClose={onClose} className="legend-sheet">
+    <Sheet label={copy.guide} onClose={onClose} className="legend-sheet">
       <header className="sheet-header">
-        <h2>{copy.legendTitle}</h2>
+        <h2>{copy.guide}</h2>
         <button type="button" className="sheet-close" aria-label={copy.sheetClose} onClick={onClose}>
           <svg viewBox="0 0 20 20" aria-hidden="true">
             <path d="M5 5l10 10M15 5L5 15" />
           </svg>
         </button>
       </header>
-      <ul className="legend-list">
-        {copy.legendSheet.map((piece) => (
-          <li key={piece.kind}>
-            <LegendArt kind={piece.kind} />
-            <div>
-              <h3>{piece.label}</h3>
-              <p>{piece.detail}</p>
-            </div>
-          </li>
-        ))}
-      </ul>
+      <div className="guide-tabs" role="group" aria-label={copy.guide}>
+        <button type="button" aria-pressed={section === 'pieces'} onClick={() => setSection('pieces')}>
+          {copy.legendLabel}
+        </button>
+        <button type="button" aria-pressed={section === 'how'} onClick={() => setSection('how')}>
+          {copy.howItWorksTitle}
+        </button>
+      </div>
+      <div className="guide-content">
+        {section === 'how' ? (
+          <HowItWorks />
+        ) : (
+          <ul className="legend-list">
+            {copy.legendSheet.map((piece) => (
+              <li key={piece.kind}>
+                <LegendArt kind={piece.kind} />
+                <div>
+                  <h3>{piece.label}</h3>
+                  <p>{piece.detail}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </Sheet>
   );
 }

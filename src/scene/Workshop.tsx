@@ -67,7 +67,9 @@ function Scene({
     if (!canvas.hasAttribute('data-flood')) canvas.setAttribute('data-flood', 'false');
     const mirror = (s: ReturnType<PlaybackStore['getState']>) => {
       const activeNode = s.machine?.activeNode ?? null;
-      highlightStore.getState().setActive(activeNode === null ? null : (program.nodes[activeNode]?.span ?? null));
+      highlightStore
+        .getState()
+        .setActive(activeNode === null ? null : (program.nodes[activeNode]?.span ?? null));
       canvas.setAttribute('data-linear', s.linear.status);
       if (s.linear.status === 'ready') {
         const run = s.linear.run;
@@ -76,7 +78,12 @@ function Scene({
         canvas.setAttribute('data-linear-max-threads', String(run.maxThreads));
         canvas.setAttribute('data-linear-end', String(run.end));
       } else {
-        for (const name of ['data-linear-ticks', 'data-linear-steps', 'data-linear-max-threads', 'data-linear-end']) {
+        for (const name of [
+          'data-linear-ticks',
+          'data-linear-steps',
+          'data-linear-max-threads',
+          'data-linear-end',
+        ]) {
           canvas.removeAttribute(name);
         }
       }
@@ -109,9 +116,15 @@ function Scene({
   const flood = useFloodModel(store);
   const linear = useStore(store, (s) => s.linear);
   const linearRun = linear.status === 'ready' ? linear.run : null;
-  const metrics = useMemo(() => displayMetrics(machine, { flood: flood.model !== null }), [machine, flood.model]);
+  const metrics = useMemo(
+    () => displayMetrics(machine, { flood: flood.model !== null }),
+    [machine, flood.model],
+  );
   const rightMetrics = useMemo(() => displayMetrics(machine), [machine]);
-  const placement = useMemo(() => (linearRun ? splitPlacement(metrics, rightMetrics) : null), [linearRun, metrics, rightMetrics]);
+  const placement = useMemo(
+    () => (linearRun ? splitPlacement(metrics, rightMetrics) : null),
+    [linearRun, metrics, rightMetrics],
+  );
   const framing = placement?.framing ?? metrics;
   const leftLabel = placement ? `${copy.split.left.toUpperCase()} · ${copy.split.leftEngines}` : undefined;
   const studio = dark ? '#22231f' : '#f3f0e8';
@@ -202,7 +215,7 @@ function Scene({
         frames={1}
         color="#3e3121"
       />
-      <Camera metrics={framing} reducedMotion={reducedMotion} resetKey={resetKey} insetRight={placement ? 320 : 0} />
+      <Camera metrics={framing} reducedMotion={reducedMotion} resetKey={resetKey} />
     </>
   );
 }
@@ -249,30 +262,33 @@ function BuildWorkshop(props: WorkshopProps) {
       </p>
     );
   return (
-    <SceneBoundary fallback={fallback}>
-      <>
-        <Canvas
-          shadows="percentage"
-          dpr={[1, 1.5]}
-          frameloop="demand"
-          camera={{ position: [2, 8, 24], fov: 36 }}
-          gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
-          fallback={fallback}
-          onCreated={({ gl }) => {
-            gl.toneMapping = ACESFilmicToneMapping;
-            gl.toneMappingExposure = 1.0;
-            gl.domElement.tabIndex = 0;
-            gl.domElement.setAttribute('aria-label', copy.scene.canvas);
-            gl.domElement.setAttribute('role', 'img');
-          }}
-        >
-          <Suspense fallback={null}>
-            <Scene {...props} machine={built.machine} store={playback.store} onExpand={expand} />
-          </Suspense>
-        </Canvas>
+    <div className="simulation">
+      <div className="scene-viewport">
+        <SceneBoundary fallback={fallback}>
+          <Canvas
+            shadows="percentage"
+            dpr={[1, 1.5]}
+            frameloop="demand"
+            camera={{ position: [2, 8, 24], fov: 36 }}
+            gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
+            fallback={fallback}
+            onCreated={({ gl }) => {
+              gl.toneMapping = ACESFilmicToneMapping;
+              gl.toneMappingExposure = 1.0;
+              gl.domElement.tabIndex = 0;
+              gl.domElement.setAttribute('aria-label', copy.scene.canvas);
+              gl.domElement.setAttribute('role', 'img');
+            }}
+          >
+            <Suspense fallback={null}>
+              <Scene {...props} machine={built.machine} store={playback.store} onExpand={expand} />
+            </Suspense>
+          </Canvas>
+        </SceneBoundary>
         <MachineParts machine={built.machine} program={program} />
         {built.machine.pieces.some((piece) => piece.kind === 'module') && (
-          <div className="module-tools" aria-label={copy.scene.expand}>
+          <details className="module-tools">
+            <summary>{copy.scene.modules}</summary>
             {built.machine.pieces
               .filter((piece) => piece.kind === 'module')
               .map((piece) => (
@@ -280,21 +296,24 @@ function BuildWorkshop(props: WorkshopProps) {
                   {copy.scene.expandModule(piece.label ?? String(piece.node))}
                 </button>
               ))}
-          </div>
+          </details>
         )}
-        <Hud
-          store={playback.store}
-          reducedMotion={props.reducedMotion}
-          program={program}
-          input={props.input}
-          onHelp={props.onHelp}
-        />
+        <p className="orbit-hint">{copy.orbitPointer}</p>
+      </div>
+      <Hud
+        store={playback.store}
+        reducedMotion={props.reducedMotion}
+        program={program}
+        input={props.input}
+        onHelp={props.onHelp}
+      />
+      <div className="playback-dock">
         <Transport store={playback.store} />
         <Suspense fallback={null}>
           <TraceLog store={playback.store} input={props.input} reducedMotion={props.reducedMotion} />
         </Suspense>
-      </>
-    </SceneBoundary>
+      </div>
+    </div>
   );
 }
 

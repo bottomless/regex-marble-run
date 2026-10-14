@@ -9,8 +9,6 @@ export interface CameraProps {
   metrics: DisplayMetrics;
   resetKey: number;
   reducedMotion: boolean;
-  /** Pixels reserved on the right for overlays (the split HUD), so the framing leaves them clear. */
-  insetRight?: number;
 }
 
 export function cameraPose(metrics: DisplayMetrics, aspect: number, fov = 36) {
@@ -54,7 +52,7 @@ function updateImmediately(controls: OrbitControlsImpl, change: () => void) {
   controls.enableDamping = damping;
 }
 
-export function Camera({ metrics, resetKey, reducedMotion, insetRight = 0 }: CameraProps) {
+export function Camera({ metrics, resetKey, reducedMotion }: CameraProps) {
   const camera = useThree((state) => state.camera);
   const canvas = useThree((state) => state.gl.domElement);
   const { width, height } = useThree((state) => state.size);
@@ -65,21 +63,11 @@ export function Camera({ metrics, resetKey, reducedMotion, insetRight = 0 }: Cam
     const controls = controlsRef.current;
     if (!controls || !(camera instanceof PerspectiveCamera) || width < 1 || height < 1) return;
 
-    const compact = width < 640;
-    const topInset = compact ? 0 : 84;
-    const bottomInset = compact ? 0 : 60;
-    const rightInset = compact ? 0 : insetRight;
-    const usableHeight = Math.max(1, height - topInset - bottomInset);
-    const fullFov = camera.getEffectiveFOV();
-    const fitFov = MathUtils.radToDeg(2 * Math.atan(Math.tan(MathUtils.degToRad(fullFov) / 2) * (usableHeight / height)));
-    const pose = cameraPose(metrics, (width - rightInset) / usableHeight, fitFov);
+    const pose = cameraPose(metrics, width / height, camera.getEffectiveFOV());
+    pose.position.sub(pose.target).multiplyScalar(1.12).add(pose.target);
     updateImmediately(controls, () => {
       camera.aspect = width / height;
-      if (topInset || bottomInset || rightInset) {
-        camera.setViewOffset(width, height, rightInset / 2, (bottomInset - topInset) / 2, width, height);
-      } else {
-        camera.clearViewOffset();
-      }
+      camera.clearViewOffset();
       camera.near = Math.max(0.01, pose.distance / 1000);
       camera.far = Math.max(100, pose.distance * 20);
       camera.up.set(0, 1, 0);
@@ -91,7 +79,7 @@ export function Camera({ metrics, resetKey, reducedMotion, insetRight = 0 }: Cam
     });
     controls.saveState();
     invalidate();
-  }, [camera, height, insetRight, invalidate, metrics, width]);
+  }, [camera, height, invalidate, metrics, width]);
 
   useLayoutEffect(() => {
     frame();

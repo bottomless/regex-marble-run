@@ -86,6 +86,7 @@ export default function Transport({ store }: TransportProps) {
               <path d="M6.5 4.5l9 5.5-9 5.5z" fill="currentColor" />
             </svg>
           )}
+          <span className="transport-play-label">{playing ? copy.transport.pause : copy.transport.play}</span>
         </button>
 
         <button
@@ -103,8 +104,6 @@ export default function Transport({ store }: TransportProps) {
         </button>
       </div>
 
-      <div className="transport-divider" aria-hidden="true" />
-
       <div className="transport-scrubber">
         <input
           type="range"
@@ -116,30 +115,25 @@ export default function Transport({ store }: TransportProps) {
           aria-valuetext={copy.transport.stepCount(currentStep, eventCount)}
           onChange={(e) => store.getState().seekEvent(Number(e.target.value))}
         />
-        <span
-          className="transport-counter"
-          aria-label={copy.transport.stepCount(currentStep, eventCount)}
-        >
+        <span className="transport-counter" aria-label={copy.transport.stepCount(currentStep, eventCount)}>
           {currentStep}/{eventCount}
         </span>
       </div>
 
-      <div className="transport-divider" aria-hidden="true" />
-
       <div className="transport-speeds" role="group" aria-label={copy.transport.speed}>
-        {SPEEDS.map((s) => (
-          <button
-            type="button"
-            key={s}
-            className="transport-speed-btn"
-            aria-pressed={speed === s}
-            aria-label={`${copy.transport.speed} ${copy.transport.speedOption(s)}`}
-            disabled={disabled}
-            onClick={() => store.getState().setSpeed(s)}
-          >
-            {copy.transport.speedOption(s)}
-          </button>
-        ))}
+        <select
+          className="transport-speed-select"
+          aria-label={copy.transport.speed}
+          value={String(speed)}
+          disabled={disabled}
+          onChange={(e) => store.getState().setSpeed(Number(e.target.value))}
+        >
+          {SPEEDS.map((s) => (
+            <option key={s} value={String(s)}>
+              {copy.transport.speedOption(s)}
+            </option>
+          ))}
+        </select>
       </div>
     </nav>
   );
