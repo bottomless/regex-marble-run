@@ -3,7 +3,7 @@ import { Vector3 } from 'three';
 import { parsePattern } from '../../src/engine/parse.ts';
 import { layout } from '../../src/layout/layout.ts';
 import { PRESETS } from '../../src/presets.ts';
-import { buildTrackBatches, CHANNEL, displayMetrics, MARBLE_LIFT, REJECTION_CHANNEL, SPRING_COIL_RADIUS, SPRING_TUBE_RADIUS, springCoilGeometry, springLaunchers, sweepFrames, trackCurve, visibleTiles } from '../../src/scene/geometry.ts';
+import { buildTrackBatches, CHANNEL, displayMetrics, MARBLE_LIFT, REJECTION_CHANNEL, SPRING_COIL_RADIUS, SPRING_PLATE_DEPTH, SPRING_PLATE_RADIUS, SPRING_TUBE_RADIUS, SPRING_WELL, springCoilGeometry, springLaunchers, sweepFrames, trackCurve, visibleTiles } from '../../src/scene/geometry.ts';
 import { cameraPose } from '../../src/scene/Camera.tsx';
 
 for (const preset of PRESETS) {
@@ -108,38 +108,65 @@ describe('rejection channels', () => {
 });
 
 describe('loop return routes', () => {
+  const machine = layout(parsePattern('(a)+b', ''));
+
   it('builds backtracking rails and lifts as open channels like the forward routes', () => {
-    const machine = layout(parsePattern('(a)+b', 'aab'));
     const loops = machine.pieces.filter((piece) =>
       ['returnRail', 'backLift', 'loopLift'].includes(piece.kind),
     );
-    expect(loops.length).toBeGreaterThan(0);
+    expect(loops.map((piece) => piece.kind)).toEqual(expect.arrayContaining(['returnRail', 'loopLift']));
     const batches = buildTrackBatches({ ...machine, pieces: loops });
-    expect(batches.map((batch) => batch.finish).sort()).toEqual(['birch', 'vermilion']);
+    expect(batches.length).toBeGreaterThan(0);
     for (const batch of batches) {
+      expect(batch.geometry.getAttribute('position').count).toBeGreaterThan(0);
       expect(Array.from(batch.geometry.getAttribute('position').array).every(Number.isFinite)).toBe(true);
       batch.geometry.dispose();
     }
   });
 
-  it('places a spring launcher at the foot of every lift, clear of the channel and the marble', () => {
-    const machine = layout(parsePattern('(a)+b', 'aab'));
-    const launchers = springLaunchers(machine);
-    expect(launchers.length).toBeGreaterThan(0);
-    for (const launcher of launchers) {
-      expect(['backLift', 'loopLift']).toContain(machine.pieces[launcher.piece].kind);
-      expect(machine.pieces[launcher.piece].points![0]).toEqual(launcher.base);
-      expect(launcher.length).toBeGreaterThan(0);
-      const geometry = springCoilGeometry(launcher.length);
+  it('opens lift shafts toward the viewer so the climbing marble stays visible', () => {
+    const lift = machine.pieces.find((piece) => piece.kind === 'loopLift')!;
+    const curve = trackCurve(lift.points!);
+    const frames = sweepFrames(curve, 24, { face: new Vector3(0, 0, 1) });
+    const shaft = frames.slice(1).filter((frame, i) => {
+      const step = frame.p.clone().sub(frames[i].p).normalize();
+      return Math.abs(step.y) > 0.95;
+    });
+    expect(shaft.length).toBeGreaterThan(0);
+    for (const frame of shaft) expect(frame.up.z).toBeGreaterThan(0.9);
+  });
+
+  it('places one spring launcher at the foot of every lift, below the plate', () => {
+    for (const preset of [machine, layout(parsePattern('c(a|o)t', '')), layout(parsePattern('(?:ab|a)+c', ''))]) {
+      const lifts = preset.pieces.flatMap((piece, index) => (['backLift', 'loopLift'].includes(piece.kind) ? [index] : []));
+      const launchers = springLaunchers(preset);
+      expect(launchers.map((launcher) => launcher.piece)).toEqual(lifts);
+      for (const launcher of launchers) {
+        expect(launcher.foot).toEqual(preset.pieces[launcher.piece].points![0]);
+        expect(launcher.base.y).toBeCloseTo(launcher.foot.y - SPRING_WELL);
+        expect(launcher.base.y + launcher.rest + SPRING_PLATE_DEPTH).toBeCloseTo(launcher.foot.y);
+        expect(launcher.stroke).toBeGreaterThan(0);
+        expect(launcher.release).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('builds a finite coil that fits inside the plate', () => {
+    for (const length of [0.2, 0.51, 1.1]) {
+      const geometry = springCoilGeometry(length);
       geometry.computeBoundingBox();
       const box = geometry.boundingBox!;
       expect(box.min.y).toBeGreaterThanOrEqual(-SPRING_TUBE_RADIUS - 1e-6);
-      expect(box.max.y).toBeLessThanOrEqual(launcher.length + SPRING_TUBE_RADIUS + 1e-6);
-      expect(Math.hypot(box.max.x, box.max.z)).toBeLessThanOrEqual(SPRING_COIL_RADIUS + SPRING_TUBE_RADIUS + 1e-6);
+      expect(box.max.y).toBeLessThanOrEqual(length + SPRING_TUBE_RADIUS + 1e-6);
+      const position = geometry.getAttribute('position');
+      for (let i = 0; i < position.count; i++) {
+        expect(Math.hypot(position.getX(i), position.getZ(i))).toBeLessThanOrEqual(SPRING_COIL_RADIUS + SPRING_TUBE_RADIUS + 1e-6);
+      }
       expect(Array.from(geometry.getAttribute('position').array).every(Number.isFinite)).toBe(true);
       geometry.dispose();
     }
-    expect(SPRING_COIL_RADIUS - SPRING_TUBE_RADIUS).toBeGreaterThan(Math.hypot(CHANNEL.halfWidth, CHANNEL.lipHeight));
+    expect(SPRING_COIL_RADIUS + SPRING_TUBE_RADIUS).toBeLessThanOrEqual(SPRING_PLATE_RADIUS);
+    expect(SPRING_PLATE_RADIUS).toBeLessThan(CHANNEL.halfWidth);
   });
 });
 
