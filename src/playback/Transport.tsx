@@ -134,6 +134,9 @@ export default function Transport({ store }: TransportProps) {
             </option>
           ))}
         </select>
+        <svg className="transport-speed-chevron" viewBox="0 0 20 20" aria-hidden="true">
+          <path d="M5 7.5l5 5 5-5" />
+        </svg>
       </div>
     </nav>
   );

@@ -1217,6 +1217,7 @@ summary:hover {
 }
 
 .transport-speeds {
+  position: relative;
   display: flex;
   flex-shrink: 0;
   align-items: center;
@@ -1225,12 +1226,32 @@ summary:hover {
 .transport-speed-select {
   width: 72px;
   min-height: 32px;
-  padding: 4px 6px;
+  padding: 4px 24px 4px 10px;
+  appearance: none;
   border: 1px solid var(--rule);
   border-radius: 999px;
   background: var(--field);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
+}
+
+.transport-speed-chevron {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.transport-speed-select:disabled + .transport-speed-chevron {
+  opacity: 0.45;
 }
 
 .trace-log-toggle {
