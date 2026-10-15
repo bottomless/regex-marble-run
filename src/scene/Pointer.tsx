@@ -1,17 +1,54 @@
+import { useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
+import type { Group } from 'three';
 import type { Vec3 } from '../layout/pieces.ts';
 import type { Materials } from './materials.ts';
+
+const STIFFNESS = 78;
+const DAMPING = 12;
+
+function shortest(from: number, to: number): number {
+  let delta = to - from;
+  while (delta > Math.PI) delta -= Math.PI * 2;
+  while (delta < -Math.PI) delta += Math.PI * 2;
+  return from + delta;
+}
 
 export default function Pointer({
   position,
   angle,
   materials,
+  reducedMotion = false,
 }: {
   position: Vec3;
   angle: number;
   materials: Materials;
+  reducedMotion?: boolean;
 }) {
+  const ref = useRef<Group>(null);
+  const current = useRef(angle);
+  const velocity = useRef(0);
+  const target = useRef(angle);
+  target.current = angle;
+  useFrame((state, delta) => {
+    const group = ref.current;
+    if (!group) return;
+    if (reducedMotion) {
+      current.current = target.current;
+      velocity.current = 0;
+      group.rotation.z = target.current;
+      return;
+    }
+    const dt = Math.min(delta, 0.05);
+    const aim = shortest(current.current, target.current);
+    const force = (aim - current.current) * STIFFNESS - velocity.current * DAMPING;
+    velocity.current += force * dt;
+    current.current += velocity.current * dt;
+    group.rotation.z = current.current;
+    if (Math.abs(aim - current.current) > 0.004 || Math.abs(velocity.current) > 0.02) state.invalidate();
+  });
   return (
-    <group position={[position.x, position.y, position.z]} rotation={[0, 0, angle]}>
+    <group ref={ref} position={[position.x, position.y, position.z]} rotation={[0, 0, angle]}>
       <mesh material={materials.brass}>
         <sphereGeometry args={[0.08, 12, 8]} />
       </mesh>

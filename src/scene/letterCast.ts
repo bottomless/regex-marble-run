@@ -129,7 +129,7 @@ function returnToHopperPolyline(layout: MachineLayout, from: Vec3, to: Vec3): Ve
   const steps = Math.max(16, Math.ceil((total + Math.abs(rearZ - from.z) * 2) * 3));
   const pts: Vec3[] = [];
   for (let i = 0; i <= steps; i++) {
-    const p = curve.getPoint(i / steps);
+    const p = curve.getPointAt(i / steps);
     pts.push({ x: p.x, y: p.y, z: p.z });
   }
   return dedupPoints(pts);

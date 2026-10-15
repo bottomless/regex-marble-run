@@ -278,7 +278,7 @@ export default function Flood({
       c.bucket = -1;
     }
     if (c.progress >= 1 && c.bucket >= PROGRESS_BUCKETS) return;
-    c.progress = Math.min(1, c.progress + delta / FLOOD_SETTLE_SECONDS);
+    c.progress = Math.min(1, c.progress + Math.min(delta, 0.05) / FLOOD_SETTLE_SECONDS);
     const next = Math.floor(c.progress * PROGRESS_BUCKETS);
     if (next !== c.bucket) {
       c.bucket = next;

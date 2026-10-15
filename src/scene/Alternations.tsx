@@ -15,11 +15,13 @@ export default function Alternations({
   machine,
   store,
   materials,
+  reducedMotion = false,
 }: {
   program: Program;
   machine: MachineLayout;
   store: PlaybackStore;
   materials: Materials;
+  reducedMotion?: boolean;
 }) {
   const state = useStore(store, (snapshot) => snapshot.machine);
   const markers = useMemo(() => alternationMarkers(program, machine, state), [program, machine, state]);
@@ -36,7 +38,7 @@ export default function Alternations({
       {markers.map((marker) => (
         <group key={marker.node}>
           {marker.angle !== null && (
-            <Pointer position={marker.position} angle={marker.angle} materials={materials} />
+              <Pointer position={marker.position} angle={marker.angle} materials={materials} reducedMotion={reducedMotion} />
           )}
           {marker.branches.map((branch) => (
             <group key={branch.option} position={[branch.position.x, branch.position.y, branch.position.z]}>

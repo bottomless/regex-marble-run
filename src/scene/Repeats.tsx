@@ -15,11 +15,13 @@ export default function Repeats({
   machine,
   store,
   materials,
+  reducedMotion = false,
 }: {
   program: Program;
   machine: MachineLayout;
   store: PlaybackStore;
   materials: Materials;
+  reducedMotion?: boolean;
 }) {
   const state = useStore(store, (snapshot) => snapshot.machine);
   const markers = useMemo(() => repeatMarkers(program, machine, state), [program, machine, state]);
@@ -38,7 +40,7 @@ export default function Repeats({
         return (
           <group key={marker.node}>
             {marker.angle !== null && (
-              <Pointer position={marker.position} angle={marker.angle} materials={materials} />
+              <Pointer position={marker.position} angle={marker.angle} materials={materials} reducedMotion={reducedMotion} />
             )}
             <group position={[marker.dial.x, marker.dial.y, marker.dial.z]}>
               <mesh rotation={[Math.PI / 2, 0, 0]} material={materials.brass}>

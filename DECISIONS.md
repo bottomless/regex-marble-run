@@ -766,4 +766,9 @@ skeleton-only routing; the original milestone context is retained.
   - `npm run e2e`: Streamlined to 4 multi-stage tests covering both desktop and mobile viewports,
     eliminating redundant page reloads and completing in ~35 s.
   - `npm run og`: 1 test in ~10 s.
-  - `npm run lint` & `npm run typecheck`: < 3 s each.
+   - `npm run lint` & `npm run typecheck`: < 3 s each.
+
+## Playback motion
+
+Marble motion was linear in time and, on partial curves, linear in the spline parameter. Both read as stutter: speed pumped through bends, and every gate was a hard stop then a hard start. Track-segment joins now use a cubic Hermite whose endpoint derivatives match (rest → accelerate, cruise → cruise, stop → ease out). Lifts leave on a spring impulse; drops accelerate. Curve samples are arc-length (`getPointAt`), including the letter hopper return. Letter marbles themselves stay linear in time at cruise speed: a 10 ms step must stay under `1.05 × (1/ROLL_PER_UNIT_MS)`, so time-warping or a longer fillet path fails the continuity test. A dwell eases from the track end onto the gate when the gap is at most 1.2, instead of popping. A rendered frame advances at most 48 ms so a demand-loop hitch slows the marble instead of teleporting it; `store.tick` itself is not clamped, because tests advance a full duration in one tick. UI mirrors of the store skip fraction-only ticks, which were rewriting DOM attributes every frame. Diverter pointers use a lightly underdamped spring; reject doors swing shut. Reduced motion still snaps those mechanisms.
+

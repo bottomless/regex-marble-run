@@ -4,13 +4,12 @@ import { BackSide, MeshBasicMaterial, Vector3 } from 'three';
 import type { Group, Mesh } from 'three';
 import type { MachineLayout } from '../layout/pieces.ts';
 import type { PlaybackStore } from '../playback/store.ts';
-import { poseAtIndex } from '../playback/motion.ts';
 import { useStore } from 'zustand';
 import { letterGlyph, visibleTiles } from './geometry.ts';
 import Glyph from './Glyph.tsx';
 import type { Materials } from './materials.ts';
 import { palette } from './materials.ts';
-import { Ride } from './ride.ts';
+import { Ride, FRAME_STEP_CAP_MS, carriedPosition } from './ride.ts';
 
 export const MARBLE_RADIUS = 0.26;
 /** Marble centre above the channel bed (the track spline), sunk a hair so it reads as resting on wood. */
@@ -74,7 +73,7 @@ export default function Marble({
   useEffect(() => store.subscribe(() => invalidate()), [store, invalidate]);
 
   useFrame((state, delta) => {
-    store.getState().tick(delta * 1000);
+    store.getState().tick(Math.min(FRAME_STEP_CAP_MS, delta * 1000));
     const snapshot = store.getState();
     if (snapshot.playing) state.invalidate();
     const group = ref.current;
@@ -82,20 +81,18 @@ export default function Marble({
       if (group) group.visible = false;
       return;
     }
-    const pose = snapshot.timeline
-      ? poseAtIndex(machine, snapshot.timeline, snapshot.segmentIndex, snapshot.fraction)
+    const carried = snapshot.timeline
+      ? carriedPosition(ride, machine, snapshot.timeline, snapshot.segmentIndex, snapshot.fraction)
       : null;
-    if (pose && snapshot.timeline) {
-      const carried =
-        ride.along(snapshot.timeline, snapshot.segmentIndex, snapshot.fraction) ?? pose.position;
+    if (carried) {
       group.visible = true;
       group.position.set(carried.x, carried.y + MARBLE_LIFT * emphasis, carried.z);
       const sphere = ball.current;
       const previous = last.current;
-      if (sphere && previous && pose.moving) {
+      if (sphere && previous) {
         const step = new Vector3().subVectors(group.position, previous);
         const distance = step.length();
-        if (distance > 1e-5 && distance < 2) {
+        if (distance > 1e-5 && distance < 1.25) {
           const axis = new Vector3().crossVectors(WORLD_UP, step.normalize());
           if (axis.lengthSq() > 1e-8)
             sphere.rotateOnWorldAxis(axis.normalize(), distance / (MARBLE_RADIUS * emphasis));

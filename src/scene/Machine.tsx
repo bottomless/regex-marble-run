@@ -196,8 +196,20 @@ export default function Machine({
                 usedOnly={input.length > 0 && !flood}
               />
               {!flood && <Flags store={store} machine={machine} materials={materials} />}
-              <Alternations program={program} store={store} machine={machine} materials={materials} />
-              <Repeats program={program} store={store} machine={machine} materials={materials} />
+              <Alternations
+                program={program}
+                store={store}
+                machine={machine}
+                materials={materials}
+                reducedMotion={reducedMotion}
+              />
+              <Repeats
+                program={program}
+                store={store}
+                machine={machine}
+                materials={materials}
+                reducedMotion={reducedMotion}
+              />
               <GateLamps store={store} machine={machine} />
               <Scout store={store} machine={machine} materials={materials} />
               <Mirrors program={program} machine={machine} input={input} store={store} />

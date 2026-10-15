@@ -87,7 +87,7 @@ function ParallelMarbles({
   useFrame((state, delta) => {
     const mesh = ref.current;
     if (!mesh) return;
-    const k = reducedMotion ? 1 : Math.min(1, delta * SMOOTHING);
+    const k = reducedMotion ? 1 : 1 - Math.exp(-SMOOTHING * Math.min(delta, 0.05));
     let moving = false;
     targets.forEach((target, i) => {
       const mover = movers.current.get(target.id)!;

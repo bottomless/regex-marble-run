@@ -132,7 +132,24 @@ function Scene({
       }
     };
     mirror(store.getState());
-    const unsubscribe = store.subscribe(mirror);
+    let prev = store.getState();
+    const unsubscribe = store.subscribe((s) => {
+      if (
+        s.eventIndex === prev.eventIndex &&
+        s.playing === prev.playing &&
+        s.atEnd === prev.atEnd &&
+        s.atStart === prev.atStart &&
+        s.machine === prev.machine &&
+        s.linear === prev.linear &&
+        s.eventCount === prev.eventCount &&
+        s.result === prev.result
+      ) {
+        prev = s;
+        return;
+      }
+      prev = s;
+      mirror(s);
+    });
     return () => {
       unsubscribe();
       highlightStore.getState().setActive(null);

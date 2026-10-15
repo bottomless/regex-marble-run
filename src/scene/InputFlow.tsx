@@ -62,7 +62,7 @@ function CastMarbles({
       if (sphere && previous && (place.riding || place.kind === 'cup')) {
         const step = new Vector3(at.x, at.y, at.z).sub(previous);
         const distance = step.length();
-        if (distance > 1e-5 && distance < 2) {
+        if (distance > 1e-5 && distance < 1.25) {
           const axis = new Vector3().crossVectors(WORLD_UP, step.normalize());
           if (axis.lengthSq() > 1e-8) sphere.rotateOnWorldAxis(axis.normalize(), distance / RADIUS);
         }

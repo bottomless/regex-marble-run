@@ -1,6 +1,7 @@
-import { useEffect, useLayoutEffect, useMemo } from 'react';
-import { useThree } from '@react-three/fiber';
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { useFrame, useThree } from '@react-three/fiber';
 import { MeshStandardMaterial } from 'three';
+import type { Group } from 'three';
 import { useStore } from 'zustand';
 import type { MachineLayout } from '../layout/pieces.ts';
 import { gateMarkers, type GateMarker } from '../playback/gates.ts';
@@ -13,6 +14,28 @@ const LAMP_OFFSET: Record<GateMarker['kind'], [number, number, number]> = {
   mirror: [0, 0.62, 0.15],
   opaque: [0, 0.62, 0.15],
 };
+
+const DOOR_CLOSED = -1.05;
+
+function RejectDoor({ material }: { material: MeshStandardMaterial }) {
+  const ref = useRef<Group>(null);
+  const angle = useRef(0);
+  useFrame((state, delta) => {
+    const group = ref.current;
+    if (!group) return;
+    const dt = Math.min(delta, 0.05);
+    angle.current += (DOOR_CLOSED - angle.current) * (1 - Math.exp(-9 * dt));
+    group.rotation.x = angle.current;
+    if (Math.abs(DOOR_CLOSED - angle.current) > 0.01) state.invalidate();
+  });
+  return (
+    <group ref={ref} position={[0, -0.6, 0.02]}>
+      <mesh position={[0, 0, 0.24]} material={material}>
+        <boxGeometry args={[0.7, 0.05, 0.48]} />
+      </mesh>
+    </group>
+  );
+}
 
 export default function GateLamps({ machine, store }: { machine: MachineLayout; store: PlaybackStore }) {
   const state = useStore(store, (snapshot) => snapshot.machine);
@@ -52,13 +75,7 @@ export default function GateLamps({ machine, store }: { machine: MachineLayout; 
                 <boxGeometry args={[0.78, 0.04, 0.3]} />
               </mesh>
             )}
-            {marker.kind === 'gate' && marker.status === 'reject' && (
-              <group position={[0, -0.6, 0.02]} rotation={[-1.05, 0, 0]}>
-                <mesh position={[0, 0, 0.24]} material={lamps.door}>
-                  <boxGeometry args={[0.7, 0.05, 0.48]} />
-                </mesh>
-              </group>
-            )}
+            {marker.kind === 'gate' && marker.status === 'reject' && <RejectDoor material={lamps.door} />}
             {marker.active && (
               <mesh position={[0, marker.kind === 'gate' ? 0.15 : 0, 0.3]} material={lamps.halo}>
                 <torusGeometry args={[0.66, 0.03, 8, 32]} />
