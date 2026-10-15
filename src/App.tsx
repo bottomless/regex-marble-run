@@ -60,6 +60,7 @@ function WorkshopApp() {
   const [copied, setCopied] = useState<'idle' | 'done' | 'failed'>('idle');
   const [presetsOpen, setPresetsOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
+  const presetsRef = useRef<HTMLDivElement>(null);
   const flagsRef = useRef<HTMLDetailsElement>(null);
   const dark = useMediaQuery('(prefers-color-scheme: dark)');
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
@@ -115,14 +116,20 @@ function WorkshopApp() {
   }, [copied]);
 
   useEffect(() => {
-    function closeFlags(event: PointerEvent) {
+    function closePopovers(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      const presets = presetsRef.current;
+      if (presets && !presets.contains(target)) {
+        setPresetsOpen(false);
+      }
       const details = flagsRef.current;
-      if (details && event.target instanceof Node && !details.contains(event.target)) {
+      if (details && !details.contains(target)) {
         details.open = false;
       }
     }
-    document.addEventListener('pointerdown', closeFlags);
-    return () => document.removeEventListener('pointerdown', closeFlags);
+    document.addEventListener('pointerdown', closePopovers);
+    return () => document.removeEventListener('pointerdown', closePopovers);
   }, []);
 
   async function copyLink() {
@@ -184,27 +191,6 @@ function WorkshopApp() {
 
       <header className="brand-header">
         <h1>{copy.brand}</h1>
-        <button
-          type="button"
-          className="preset-open"
-          aria-label={copy.presetsLabel}
-          aria-expanded={presetsOpen}
-          data-current-preset={preset?.id}
-          onClick={() => setPresetsOpen(true)}
-        >
-          <svg className="preset-grid-icon" viewBox="0 0 16 16" aria-hidden="true">
-            <circle cx="5" cy="4.5" r="1.2" />
-            <circle cx="11" cy="4.5" r="1.2" />
-            <circle cx="5" cy="8" r="1.2" />
-            <circle cx="11" cy="8" r="1.2" />
-            <circle cx="5" cy="11.5" r="1.2" />
-            <circle cx="11" cy="11.5" r="1.2" />
-          </svg>
-          <span>{copy.presetsLabel}</span>
-          <svg className="preset-chevron" viewBox="0 0 20 20" aria-hidden="true">
-            <path d="M6 8l4 4 4-4" />
-          </svg>
-        </button>
       </header>
 
       <section className="control-island" aria-label={copy.controls}>
@@ -214,6 +200,49 @@ function WorkshopApp() {
               {copy.patternLabel}
             </label>
             <div className={`pattern-editor${error ? ' pattern-editor--invalid' : ''}`}>
+              <div
+                ref={presetsRef}
+                className="preset-picker"
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape' && presetsOpen) {
+                    event.preventDefault();
+                    setPresetsOpen(false);
+                    event.currentTarget.querySelector<HTMLButtonElement>('.preset-open')?.focus();
+                  }
+                }}
+                onBlur={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget)) setPresetsOpen(false);
+                }}
+              >
+                <button
+                  type="button"
+                  className="preset-open"
+                  aria-label={copy.presetsLabel}
+                  aria-expanded={presetsOpen}
+                  data-current-preset={preset?.id}
+                  onClick={() => setPresetsOpen((open) => !open)}
+                >
+                  <svg className="preset-grid-icon" viewBox="0 0 16 16" aria-hidden="true">
+                    <circle cx="5" cy="4.5" r="1.2" />
+                    <circle cx="11" cy="4.5" r="1.2" />
+                    <circle cx="5" cy="8" r="1.2" />
+                    <circle cx="11" cy="8" r="1.2" />
+                    <circle cx="5" cy="11.5" r="1.2" />
+                    <circle cx="11" cy="11.5" r="1.2" />
+                  </svg>
+                  <span>{copy.presetsLabel}</span>
+                  <svg className="preset-chevron" viewBox="0 0 20 20" aria-hidden="true">
+                    <path d="M6 8l4 4 4-4" />
+                  </svg>
+                </button>
+                {presetsOpen && (
+                  <PresetSheet
+                    current={preset}
+                    onSelect={selectPreset}
+                    onClose={() => setPresetsOpen(false)}
+                  />
+                )}
+              </div>
               <PatternField
                 value={draft.pattern}
                 program={parsed.program}
@@ -338,9 +367,6 @@ function WorkshopApp() {
           </svg>
         </button>
       </footer>
-      {presetsOpen && (
-        <PresetSheet current={preset} onSelect={selectPreset} onClose={() => setPresetsOpen(false)} />
-      )}
       {guideOpen && (
         <Suspense fallback={null}>
           <LegendSheet onClose={() => setGuideOpen(false)} />

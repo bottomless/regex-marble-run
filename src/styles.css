@@ -177,19 +177,31 @@ summary:hover {
   text-transform: uppercase;
 }
 
+.preset-picker {
+  flex-shrink: 0;
+  height: 42px;
+  border-right: 1px solid var(--rule);
+}
+
 .preset-open {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-height: 36px;
-  padding: 6px 14px;
-  border: 1px solid var(--rule);
-  border-radius: 999px;
-  background: var(--paper);
-  box-shadow: var(--shadow);
+  gap: 7px;
+  height: 100%;
+  padding: 0 12px 0 15px;
+  border: 0;
+  border-radius: 999px 0 0 999px;
+  background: transparent;
+  color: var(--ink);
   font-size: 13px;
   font-weight: 500;
+  white-space: nowrap;
   pointer-events: auto;
+}
+
+.preset-open:hover,
+.preset-open[aria-expanded='true'] {
+  background: var(--field);
 }
 
 .preset-grid-icon {
@@ -208,6 +220,11 @@ summary:hover {
   stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
+  transition: transform 120ms;
+}
+
+.preset-open[aria-expanded='true'] .preset-chevron {
+  transform: rotate(180deg);
 }
 
 .tool-rail {
@@ -348,10 +365,16 @@ summary:hover {
   box-shadow: var(--shadow);
 }
 
-.pattern-editor:focus-within,
+.pattern-editor:has(input:focus),
 .string-editor:focus-within {
   outline: 2px solid var(--cobalt);
   outline-offset: 2px;
+}
+
+.preset-open:focus-visible,
+.pattern-options > summary:focus-visible {
+  outline: 2px solid var(--cobalt);
+  outline-offset: -2px;
 }
 
 .pattern-editor--invalid {
@@ -697,6 +720,7 @@ summary:hover {
   font-family: var(--mono);
 }
 
+.preset-panel,
 .flag-panel {
   position: absolute;
   top: calc(100% + 8px);
@@ -704,7 +728,7 @@ summary:hover {
   left: 0;
   z-index: 20;
   padding: 8px;
-  max-height: min(360px, 50dvh);
+  max-height: min(400px, 55dvh);
   overflow-y: auto;
   overscroll-behavior: contain;
   border: 1px solid var(--rule);
@@ -1496,24 +1520,20 @@ summary:hover {
 }
 
 .preset-list {
-  flex: 1;
-  min-height: 0;
   margin: 0;
-  padding: 12px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  padding: 0;
   list-style: none;
 }
 
 .preset-list li + li {
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .preset-list button {
   display: flex;
-  gap: 14px;
+  gap: 12px;
   width: 100%;
-  padding: 14px 12px;
+  padding: 10px 12px;
   border: 1px solid transparent;
   border-radius: var(--radius);
   background: transparent;
@@ -1531,34 +1551,43 @@ summary:hover {
 
 .preset-number {
   flex-shrink: 0;
-  padding-top: 2px;
+  padding-top: 1px;
   color: var(--brass);
-  font: 13px / 1.5 var(--mono);
+  font: 12.5px / 1.5 var(--mono);
   font-variant-numeric: tabular-nums;
 }
 
 .preset-body {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  flex: 1;
+  gap: 3px;
   min-width: 0;
 }
 
+.preset-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
 .preset-name {
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 600;
 }
 
 .preset-pattern {
   color: var(--cobalt);
-  font: 13px / 1.5 var(--mono);
+  font: 12.5px / 1.4 var(--mono);
   overflow-wrap: anywhere;
 }
 
 .preset-caption {
   color: var(--muted);
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 12.5px;
+  line-height: 1.5;
 }
 
 .guide-tabs {
@@ -1852,8 +1881,17 @@ summary:hover {
     pointer-events: auto;
   }
 
+  .preset-picker {
+    height: 44px;
+  }
+
+  .preset-open {
+    padding: 0 10px 0 13px;
+  }
+
   .pattern-capsule {
     --pattern-height: 44px;
+    padding: 0 12px;
     font-size: 16px;
   }
 

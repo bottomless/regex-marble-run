@@ -152,7 +152,7 @@ export const copy = {
     module: (text: string) => `Module ${text}`,
   },
   editToBuild: 'Adjust the pattern to build the machine.',
-  presetsLabel: 'Presets',
+  presetsLabel: 'Examples',
   customPreset: 'Your own pattern',
   customCaption: 'Change a gate, add a fork, or make a loop. The machine rebuilds as you type.',
   source: 'Original postmortem',

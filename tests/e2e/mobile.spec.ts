@@ -38,17 +38,20 @@ async function expectMobileLayout(page: Page) {
     expect(box.y, selector).toBeGreaterThanOrEqual(dock.y);
     expect(box.y + box.height, selector).toBeLessThanOrEqual(dock.y + dock.height);
   }
+  const presetOpen = page.locator('.pattern-editor .preset-open');
   const patternEditor = page.locator('.pattern-editor');
   const patternInput = patternEditor.locator('#pattern');
   if (await patternInput.isVisible()) {
     const options = patternEditor.locator('details.pattern-options');
+    await expect(presetOpen).toBeVisible();
     await expect(options).toHaveCount(1);
+    const presetBox = (await presetOpen.boundingBox())!;
     const row = (await patternEditor.boundingBox())!;
     const pattern = (await patternInput.boundingBox())!;
     const flags = (await options.locator(':scope > summary').boundingBox())!;
     expect(row.x).toBeGreaterThanOrEqual(0);
     expect(row.x + row.width).toBeLessThanOrEqual(width);
-    for (const box of [pattern, flags]) {
+    for (const box of [presetBox, pattern, flags]) {
       expect(box.width).toBeGreaterThan(0);
       expect(box.height).toBeGreaterThan(0);
       expect(box.x).toBeGreaterThanOrEqual(row.x);
@@ -56,7 +59,9 @@ async function expectMobileLayout(page: Page) {
       expect(box.y).toBeGreaterThanOrEqual(row.y);
       expect(box.y + box.height).toBeLessThanOrEqual(row.y + row.height);
     }
+    expect(Math.abs(presetBox.y + presetBox.height / 2 - (pattern.y + pattern.height / 2))).toBeLessThanOrEqual(1);
     expect(Math.abs(pattern.y + pattern.height / 2 - (flags.y + flags.height / 2))).toBeLessThanOrEqual(1);
+    expect(presetBox.x + presetBox.width).toBeLessThanOrEqual(pattern.x);
     expect(pattern.x + pattern.width).toBeLessThanOrEqual(flags.x);
     const panel = options.locator('.flag-panel');
     if (await panel.isVisible()) {

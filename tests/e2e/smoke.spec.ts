@@ -278,21 +278,25 @@ test('desktop layout places Pattern and String at top-center over the full-scree
     { width: 1024, height: 768 },
   ]) {
     await page.setViewportSize(viewport);
+    const presetOpen = page.locator('.pattern-editor .preset-open');
     const patternEditor = page.locator('.pattern-editor');
     const stringEditor = page.locator('.string-editor');
     const options = patternEditor.locator('details.pattern-options');
     const summary = options.locator(':scope > summary');
+    await expect(presetOpen).toBeVisible();
+    await expect(page.locator('.brand-header .preset-open')).toHaveCount(0);
     await expect(options).toHaveCount(1);
     await expect(page.locator('.editor-options, .preset-note, .pattern-flags')).toHaveCount(0);
     await expect(page.getByText('About this example', { exact: true })).toHaveCount(0);
     for (const expanded of [false, true]) {
       if (expanded) await summary.click();
       await expect(options).toHaveJSProperty('open', expanded);
+      const presetBox = (await presetOpen.boundingBox())!;
       const row = (await patternEditor.boundingBox())!;
       const stringBox = (await stringEditor.boundingBox())!;
       const pattern = (await patternEditor.locator('#pattern').boundingBox())!;
       const flags = (await summary.boundingBox())!;
-      for (const box of [pattern, flags]) {
+      for (const box of [presetBox, pattern, flags]) {
         expect(box.width).toBeGreaterThan(0);
         expect(box.height).toBeGreaterThan(0);
         expect(box.x).toBeGreaterThanOrEqual(row.x);
@@ -300,7 +304,9 @@ test('desktop layout places Pattern and String at top-center over the full-scree
         expect(box.y).toBeGreaterThanOrEqual(row.y);
         expect(box.y + box.height).toBeLessThanOrEqual(row.y + row.height);
       }
+      expect(Math.abs(presetBox.y + presetBox.height / 2 - (pattern.y + pattern.height / 2))).toBeLessThanOrEqual(1);
       expect(Math.abs(pattern.y + pattern.height / 2 - (flags.y + flags.height / 2))).toBeLessThanOrEqual(1);
+      expect(presetBox.x + presetBox.width).toBeLessThanOrEqual(pattern.x);
       expect(pattern.x + pattern.width).toBeLessThanOrEqual(flags.x);
       expect(row.y + row.height).toBeLessThanOrEqual(stringBox.y);
       const panel = options.locator('.flag-panel');
