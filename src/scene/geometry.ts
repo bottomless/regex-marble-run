@@ -254,7 +254,7 @@ export function buildTrackBatches(machine: MachineLayout): TrackBatch[] {
     buckets.set(finish, bucket);
   }
   function segmentsFor(length: number): number {
-    return Math.min(72, Math.max(8, Math.ceil(length * 5)));
+    return Math.min(180, Math.max(12, Math.ceil(length * 14)));
   }
   const feet = machine.pieces
     .filter((piece) => LIFT_KINDS.has(piece.kind) && piece.points && piece.points.length >= 2)
@@ -267,7 +267,7 @@ export function buildTrackBatches(machine: MachineLayout): TrackBatch[] {
     if (points.length < 2) return;
     const curve = trackCurve(points);
     const length = curve.getLength();
-    const until = options.trimEnd ? Math.max(0.5, 1 - options.trimEnd / Math.max(length, 1e-6)) : 1;
+    const until = options.trimEnd ? Math.max(0.4, 1 - options.trimEnd / Math.max(length, 1e-6)) : 1;
     const frames = sweepFrames(curve, segmentsFor(length * until), {
       until,
       face: options.loop ? SHAFT_FACE : undefined,
@@ -328,9 +328,9 @@ export interface SpringLauncher {
   release: number;
 }
 
-export const SPRING_WELL = 0.55;
+export const SPRING_WELL = 0.4;
 export const SPRING_BASE_DEPTH = 0.06;
-export const SPRING_FEED_GAP = 0.2;
+export const SPRING_FEED_GAP = 0;
 export const SPRING_COIL_RADIUS = 0.13;
 export const SPRING_TUBE_RADIUS = 0.022;
 export const SPRING_PLATE_RADIUS = 0.17;

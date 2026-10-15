@@ -94,6 +94,9 @@ export default function Springs({
     <group>
       {launchers.map((launcher, index) => (
         <group key={launcher.piece} position={[launcher.base.x, launcher.base.y, launcher.base.z]}>
+          <mesh position={[0, -SPRING_BASE_DEPTH / 2 - 0.01, 0]} material={materials.board} castShadow receiveShadow>
+            <cylinderGeometry args={[SPRING_PLATE_RADIUS + 0.055, SPRING_PLATE_RADIUS + 0.07, SPRING_BASE_DEPTH + 0.03, 20]} />
+          </mesh>
           <mesh position={[0, -SPRING_BASE_DEPTH / 2, 0]} material={materials.steel} castShadow receiveShadow>
             <cylinderGeometry args={[SPRING_PLATE_RADIUS, SPRING_PLATE_RADIUS + 0.02, SPRING_BASE_DEPTH, 20]} />
           </mesh>

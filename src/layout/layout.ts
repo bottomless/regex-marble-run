@@ -14,8 +14,8 @@ const BRANCH_GAP = 3.0;
 export const STAIR_STEP = 3.0;
 /** How far a return feed descends from its exit to the foot of the spring shaft behind it. */
 export const LIFT_FEED_DROP = 0.5;
-const SHAFT_BEND = 0.3;
-const SHAFT_CREST = 0.25;
+const SHAFT_BEND = 0.42;
+const SHAFT_CREST = 0.34;
 type Bounds = MachineLayout['bounds'];
 type Ref = number | { child: number; port: 'entry' | 'exit' };
 interface Child {
@@ -192,7 +192,8 @@ function buildRejectionNetwork(builder: Builder): void {
 
 /**
  * Controls for a lift: a straight vertical shaft rising from the spring at `foot`, then (when the
- * port sits off to the side) a rounded crest that tips the marble over into the port.
+ * port sits off to the side) a smooth rounded crest that tips the marble over into the port. The
+ * crest uses enough arc samples for a gentle, kink-free bend.
  */
 function springShaft(foot: Vec3, port: Vec3): Vec3[] {
   const dx = port.x - foot.x;
@@ -203,12 +204,13 @@ function springShaft(foot: Vec3, port: Vec3): Vec3[] {
     const top = vec(foot.x, port.y - SHAFT_BEND, foot.z);
     return top.y - base.y > 0.1 ? [base, top] : [];
   }
-  const crest = Math.max(port.y + SHAFT_CREST, base.y + SHAFT_BEND + 0.2);
+  const crest = Math.max(port.y + SHAFT_CREST, base.y + SHAFT_BEND + 0.15);
   const ux = dx / run;
   const uz = dz / run;
   const controls = [base];
-  for (const angle of [0, 30, 60, 90]) {
-    const theta = (angle * Math.PI) / 180;
+  const steps = 10;
+  for (let i = 0; i <= steps; i++) {
+    const theta = (i / steps) * (Math.PI / 2);
     const out = SHAFT_BEND * (1 - Math.cos(theta));
     controls.push(
       vec(foot.x + ux * out, crest - SHAFT_BEND + SHAFT_BEND * Math.sin(theta), foot.z + uz * out),
