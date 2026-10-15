@@ -163,9 +163,9 @@ summary:hover {
   left: 24px;
   z-index: 12;
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
   pointer-events: none;
 }
 
@@ -175,6 +175,33 @@ summary:hover {
   font: 600 11px / 1.3 var(--mono);
   letter-spacing: 0.12em;
   text-transform: uppercase;
+}
+
+.brand-repo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 10px;
+  border-left: 1px solid var(--rule);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+  text-decoration: none;
+  white-space: nowrap;
+  pointer-events: auto;
+  transition: color 120ms;
+}
+
+.brand-repo:hover {
+  color: var(--ink);
+}
+
+.github-mark {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
 }
 
 .preset-picker {
@@ -316,6 +343,9 @@ summary:hover {
 }
 
 .share-status {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
   padding: 6px 12px;
   border: 1px solid var(--rule);
   border-radius: 999px;
@@ -1888,10 +1918,16 @@ summary:hover {
     position: static;
     order: 1;
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     width: 100%;
     pointer-events: auto;
+  }
+
+  .brand-repo {
+    padding-left: 0;
+    border-left: 0;
   }
 
   .control-island {
@@ -1934,12 +1970,20 @@ summary:hover {
   }
 
   .workshop-stage {
-    position: static;
+    position: relative;
+    inset: auto;
     order: 3;
     display: flex;
     flex-direction: column;
     flex: 1;
     min-height: 420px;
+  }
+
+  .workshop-stage > .reset-view {
+    position: absolute;
+    top: 8px;
+    right: 0;
+    z-index: 10;
   }
 
   .simulation {

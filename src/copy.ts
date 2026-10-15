@@ -32,6 +32,11 @@ export const copy = {
   brand: 'Regex Marble Run',
   edition: 'REGEX / WORKSHOP 04',
   descriptor: 'See how a regex finds a match.',
+  repo: {
+    href: 'https://github.com/bottomless/regex-marble-run',
+    label: 'Regex Marble Run on GitHub',
+    text: 'GitHub',
+  },
   guide: 'Guide',
   editorTitle: 'Your expression',
   editorHint: 'Edit below. The machine updates as you type.',

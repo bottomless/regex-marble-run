@@ -1,8 +1,12 @@
 # Regex Marble Run
 
-A physical 3D regular expression machine built with React, Three.js, and React Three Fiber.
+A learning tool that shows how regular expressions work. Patterns become a physical 3D marble run, built with React, Three.js, and React Three Fiber.
 
 Regex Marble Run visualizes regular expression matching as a mechanical marble run. Marbles ride down birch-plywood tracks, test characters at brass gate arches, choose branches at enameled diverters, cycle through loop lifts, frame submatches in capture brackets, and trigger position sensors. When a backtracking engine hits a catastrophic ReDoS pattern, marbles flood into a collection tank.
+
+## Live demo
+
+The machine is running at [regexmarblerun.com](https://regexmarblerun.com). Type a pattern and a string, then watch a marble run the match — including flags, captures, and catastrophic backtracking.
 
 ## Features
 
@@ -77,6 +81,8 @@ To deploy to Vercel:
 - **Repetition bounds**: Extremely large bounded repetitions (>50,000 unrolled instructions) are capped to prevent worker memory exhaustion.
 
 ## Credits
+
+Built with [Agent Duel](https://github.com/bottomless/agent-duel).
 
 - **Parser**: [@eslint-community/regexpp](https://github.com/eslint-community/regexpp)
 - **3D Graphics**: [Three.js](https://threejs.org/) and [React Three Fiber](https://r3f.docs.pmnd.rs/)
