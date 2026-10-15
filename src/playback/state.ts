@@ -331,3 +331,29 @@ export class TraceCursor {
 export function replayFinal(prog: Program, trace: Trace): MachineState {
   return new TraceCursor(prog, trace, Infinity).stateAt(trace.length);
 }
+
+/**
+ * The flag stack after the whole trace, equal to `replayFinal(prog, trace).flags`. Replays only the
+ * flag pushes and pops, so it stays linear without cloning scopes for every planted flag.
+ */
+export function finalFlags(trace: Trace): FlagEntry[] {
+  const flags: FlagEntry[] = [];
+  for (let i = 0; i < trace.length; i++) {
+    switch (trace.t[i] as T) {
+      case T.attempt:
+      case T.nomatch:
+        flags.length = 0;
+        break;
+      case T.choose:
+        flags.push({ node: trace.a[i], option: trace.b[i], pos: trace.c[i] });
+        break;
+      case T.backtrack:
+        flags.pop();
+        break;
+      case T.look:
+        if (trace.b[i] !== 0 && flags.length > trace.d[i]) flags.length = trace.d[i];
+        break;
+    }
+  }
+  return flags;
+}

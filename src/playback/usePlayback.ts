@@ -41,7 +41,8 @@ interface Latest {
  * prefers reduced motion. A separate native worker times the browser's own RegExp on the same input
  * and publishes the reading through `setNative`; a cancelled probe leaves the reading as `running`
  * until its replacement reports. Layout changes (module expansion) rebuild the timeline in place via
- * `setLayout` without re-running the engine.
+ * `setLayout` without re-running the engine; a new pattern or flags clears the previous trace instead
+ * of rebuilding it against a machine it no longer belongs to.
  *
  * The engine client is created per run inside the effect and disposed in its cleanup, which is both
  * StrictMode-safe (each mount gets a live client) and leak-free (an in-flight worker is cancelled and
@@ -142,8 +143,11 @@ export function usePlaybackController(options: UsePlaybackOptions): PlaybackCont
   }, [store, mode, program, pattern, flags, input]);
 
   useEffect(() => {
-    if (layout && store.getState().trace) store.getState().setLayout(layout);
-  }, [store, layout]);
+    const s = store.getState();
+    if (!layout || !s.trace) return;
+    if (s.program?.source === program.source && s.program.flagsText === program.flagsText) s.setLayout(layout);
+    else s.reset();
+  }, [store, layout, program]);
 
   return { store, status };
 }

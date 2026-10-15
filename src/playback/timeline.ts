@@ -29,7 +29,7 @@ export interface Segment {
   /** True when the segment was collapsed to zero duration by a high speed. */
   jump: boolean;
   node: NodeId | null;
-  /** Graph point ids the marble travels along (roll/drop/lift). */
+  /** Graph point ids the marble travels along (roll/drop/lift). Shared between segments: read-only. */
   route?: number[];
   pos?: number;
   len?: number;
@@ -76,7 +76,11 @@ const BASE_MS: Record<SegmentKind, number> = {
 
 export const ROLL_PER_UNIT_MS = 95;
 
+const routeLengths = new WeakMap<number[], number>();
+
 function routeLength(layout: MachineLayout, route: number[]): number {
+  const cached = routeLengths.get(route);
+  if (cached !== undefined) return cached;
   let total = 0;
   for (let i = 1; i < route.length; i++) {
     const a = layout.graph.points[route[i - 1]]?.position;
@@ -84,6 +88,7 @@ function routeLength(layout: MachineLayout, route: number[]): number {
     if (!a || !b) continue;
     total += Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
   }
+  routeLengths.set(route, total);
   return total;
 }
 
@@ -130,10 +135,19 @@ export function buildTimeline(trace: Trace, layout: MachineLayout, opts: Timelin
     totalBase += base;
   };
 
+  const pointCount = graph.points.length;
+  const routes = new Map<number, number[] | null>();
   const route = (from: number | null | undefined, to: number | undefined): number[] | undefined => {
     if (from === null || from === undefined || to === undefined) return undefined;
-    const path = routePath(graph, from, to);
-    return path && path.length >= 2 ? path : undefined;
+    const valid = Number.isInteger(from) && Number.isInteger(to) && from >= 0 && to >= 0 && from < pointCount && to < pointCount;
+    const key = from * pointCount + to;
+    let path = valid ? routes.get(key) : undefined;
+    if (path === undefined) {
+      const found = routePath(graph, from, to);
+      path = found && found.length >= 2 ? found : null;
+      if (valid) routes.set(key, path);
+    }
+    return path ?? undefined;
   };
 
   for (let i = 0; i < trace.length; i++) {

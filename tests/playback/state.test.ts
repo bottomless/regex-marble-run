@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parsePattern } from '../../src/engine/parse.ts';
 import { runBacktrack, type MatchResult } from '../../src/engine/backtrack.ts';
 import { T, type Trace } from '../../src/engine/trace.ts';
-import { TraceCursor, replayFinal, type MachineState } from '../../src/playback/state.ts';
+import { TraceCursor, finalFlags, replayFinal, type MachineState } from '../../src/playback/state.ts';
 import { PRESETS } from '../../src/presets.ts';
 
 interface Case {
@@ -183,5 +183,18 @@ describe('playback state reducer (M5 step 1)', () => {
     expect(state.phase).toBe('idle');
     expect(state.attempts).toBe(0);
     expect(state.head).toBe(0);
+  });
+
+  it('finalFlags matches the full replay, including truncated flood presets', () => {
+    const floodCases: Case[] = PRESETS.filter((p) => p.number > 5).map((p) => ({
+      name: p.id,
+      pattern: p.pattern,
+      flags: p.flags,
+      input: p.input,
+    }));
+    for (const c of [...cases, ...floodCases]) {
+      const { prog, trace } = build(c);
+      expect(finalFlags(trace), c.name).toEqual(replayFinal(prog, trace).flags);
+    }
   });
 });

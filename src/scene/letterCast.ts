@@ -88,30 +88,48 @@ function edgeMap(layout: MachineLayout): Map<string, number> {
   return edges;
 }
 
-export function hiddenLoopPieces(layout: MachineLayout, timeline: Timeline | null): Set<number> {
+const NO_PIECES: ReadonlySet<number> = new Set();
+const hiddenCache = new WeakMap<Timeline, WeakMap<MachineLayout, ReadonlySet<number>>>();
+
+/** Loop pieces the timeline never rides; cached per timeline and layout, so callers share one read-only set. */
+export function hiddenLoopPieces(layout: MachineLayout, timeline: Timeline | null): ReadonlySet<number> {
   const loopIndices: number[] = [];
   layout.pieces.forEach((piece, index) => {
     if (LOOP.has(piece.kind)) loopIndices.push(index);
   });
-  if (loopIndices.length === 0) return new Set();
+  if (loopIndices.length === 0) return NO_PIECES;
   if (!timeline) return new Set(loopIndices);
+  let byLayout = hiddenCache.get(timeline);
+  const cached = byLayout?.get(layout);
+  if (cached) return cached;
+  const pointCount = layout.graph.points.length;
+  const pieceByHop = new Map<number, number>();
+  for (const edge of layout.graph.edges) pieceByHop.set(edge.from * pointCount + edge.to, edge.piece);
   const used = new Set<number>();
-  const edges = edgeMap(layout);
+  const seen = new Set<number[]>();
+  let hidden: ReadonlySet<number> | null = null;
   for (const segment of timeline.segments) {
     const route = segment.route;
-    if (!route) continue;
+    if (!route || seen.has(route)) continue;
+    seen.add(route);
     for (let i = 1; i < route.length; i++) {
-      const piece = edges.get(`${route[i - 1]}:${route[i]}`);
+      const piece = pieceByHop.get(route[i - 1] * pointCount + route[i]);
       if (piece !== undefined && LOOP.has(layout.pieces[piece]?.kind)) {
         used.add(piece);
-        if (used.size === loopIndices.length) return new Set();
+        if (used.size === loopIndices.length) {
+          hidden = NO_PIECES;
+          break;
+        }
       }
     }
+    if (hidden) break;
   }
-  const hidden = new Set<number>();
-  for (const index of loopIndices) {
-    if (!used.has(index)) hidden.add(index);
+  if (!hidden) hidden = new Set(loopIndices.filter((index) => !used.has(index)));
+  if (!byLayout) {
+    byLayout = new WeakMap();
+    hiddenCache.set(timeline, byLayout);
   }
+  byLayout.set(layout, hidden);
   return hidden;
 }
 

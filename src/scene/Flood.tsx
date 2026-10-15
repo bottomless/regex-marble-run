@@ -3,7 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { useStore } from 'zustand';
 import type { MachineLayout } from '../layout/pieces.ts';
 import { flagColumns, floodAt, floodModel, type FloodModel } from '../playback/flood.ts';
-import type { FlagEntry } from '../playback/state.ts';
+import { finalFlags, type FlagEntry } from '../playback/state.ts';
 import type { PlaybackStore } from '../playback/store.ts';
 import type { DisplayMetrics } from './geometry.ts';
 import type { Materials } from './materials.ts';
@@ -22,12 +22,11 @@ interface FloodClock {
 export function useFloodModel(store: PlaybackStore): { model: FloodModel | null; recorded: FlagEntry[] } {
   const result = useStore(store, (s) => s.result);
   const trace = useStore(store, (s) => s.trace);
-  const cursor = useStore(store, (s) => s.cursor);
   return useMemo(() => {
     const model = result && trace ? floodModel(result, trace) : null;
-    const recorded = model && cursor && trace ? cursor.stateAt(trace.length).flags : EMPTY_FLAGS;
+    const recorded = model && trace ? finalFlags(trace) : EMPTY_FLAGS;
     return { model, recorded };
-  }, [result, trace, cursor]);
+  }, [result, trace]);
 }
 
 /**
