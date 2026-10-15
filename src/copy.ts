@@ -232,7 +232,7 @@ export const copy = {
     },
     {
       heading: 'Why backtracking explodes',
-      body: 'JavaScript, Python, Java and PCRE try one path, plant a flag at every choice, and come back to the last flag on failure. A loop inside a loop lets the same characters be grouped in many ways, so a short string can mean millions of tries. Presets 6 to 9 flood the tank with one marble per sampled backtrack.',
+      body: 'JavaScript, Python, Java and PCRE try one path, plant a flag at every choice, and come back to the last flag on failure. A loop inside a loop lets the same characters be grouped in many ways, so a short string can mean millions of tries. Presets 6 to 9 stack deep flag columns on the diverters as the marbles loop and backtrack through the machine.',
     },
     {
       heading: 'Why linear-time engines do not',

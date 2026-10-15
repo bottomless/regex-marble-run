@@ -28,19 +28,17 @@ export default function Pointer({
   const ref = useRef<Group>(null);
   const current = useRef(angle);
   const velocity = useRef(0);
-  const target = useRef(angle);
-  target.current = angle;
   useFrame((state, delta) => {
     const group = ref.current;
     if (!group) return;
     if (reducedMotion) {
-      current.current = target.current;
+      current.current = angle;
       velocity.current = 0;
-      group.rotation.z = target.current;
+      group.rotation.z = angle;
       return;
     }
     const dt = Math.min(delta, 0.05);
-    const aim = shortest(current.current, target.current);
+    const aim = shortest(current.current, angle);
     const force = (aim - current.current) * STIFFNESS - velocity.current * DAMPING;
     velocity.current += force * dt;
     current.current += velocity.current * dt;

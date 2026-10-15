@@ -29,6 +29,10 @@ for (const preset of PRESETS) {
 
     it('frames both the machine and base at desktop and mobile aspect ratios', () => {
       const metrics = displayMetrics(machine);
+      const floodMetrics = displayMetrics(machine, { flood: true });
+      expect(metrics.tank).toBeNull();
+      expect(floodMetrics.tank).toBeNull();
+      expect(floodMetrics.boardWidth).toBe(metrics.boardWidth);
       expect(metrics.height).toBeLessThanOrEqual(11);
       expect(metrics.offset.every(Number.isFinite)).toBe(true);
       for (const aspect of [390 / 520, 844 / 390, (1440 - 344) / 900]) {

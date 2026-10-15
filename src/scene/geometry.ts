@@ -64,15 +64,14 @@ export interface TrackBatch {
 /** Height the verdict sign adds above the backboard's top rail; the camera frames it too. */
 export const SIGN_RISE = 0.95;
 
-export function displayMetrics(machine: MachineLayout, options: { flood?: boolean } = {}): DisplayMetrics {
+export function displayMetrics(machine: MachineLayout, _options: { flood?: boolean } = {}): DisplayMetrics {
   const { min, max } = machine.bounds;
   const width = Math.max(1, max.x - min.x);
   const height = Math.max(1, max.y - min.y);
   const depth = Math.max(1, max.z - min.z);
   const scale = 11 / Math.max(height, width * 0.72, depth);
   const scaledHeight = Math.min(11, height * scale);
-  const baseBoardWidth = Math.max(8.2, width * scale + 2.8);
-  const boardWidth = options.flood ? baseBoardWidth + TANK_SPAN : baseBoardWidth;
+  const boardWidth = Math.max(8.2, width * scale + 2.8);
   return {
     scale,
     offset: [-(min.x + max.x) / 2, -min.y, -(min.z + max.z) / 2],
@@ -81,16 +80,7 @@ export function displayMetrics(machine: MachineLayout, options: { flood?: boolea
     depth: depth * scale,
     boardWidth,
     boardDepth: Math.max(4, depth * scale + 2.6),
-    tank: options.flood
-      ? {
-          x: boardWidth / 2 - TANK_SPAN / 2,
-          z: 0,
-          width: 1.6,
-          depth: 1.6,
-          height: Math.min(4.6, Math.max(2.8, scaledHeight * 0.5)),
-          radius: 0.065,
-        }
-      : null,
+    tank: null,
   };
 }
 

@@ -3,7 +3,8 @@ import { useThree } from '@react-three/fiber';
 import { BoxGeometry, CylinderGeometry, SphereGeometry } from 'three';
 import { useStore } from 'zustand';
 import type { MachineLayout, Piece } from '../layout/pieces.ts';
-import { flagMarkers } from '../playback/flags.ts';
+import { FLAG_PITCH, flagMarkers } from '../playback/flags.ts';
+import { COLUMN_VISIBLE_CAP } from '../playback/flood.ts';
 import type { FlagEntry } from '../playback/state.ts';
 import type { PlaybackStore } from '../playback/store.ts';
 import { Hardware } from './Gates.tsx';
@@ -27,7 +28,8 @@ export default function Flags({
   const canvas = useThree((state) => state.gl.domElement);
   const invalidate = useThree((state) => state.invalidate);
   const hardware = useMemo(() => {
-    const pieces: Piece[] = markers.map((marker) => ({
+    const visible = markers.filter((marker) => marker.level < COLUMN_VISIBLE_CAP);
+    const pieces: Piece[] = visible.map((marker) => ({
       kind: 'diverter',
       node: marker.node,
       position: marker.position,
@@ -86,16 +88,20 @@ export default function Flags({
           receiveShadow={false}
         />
       ))}
-      {hardware.tops.map((marker) => (
-        <Glyph
-          key={marker.column}
-          text={`@${marker.pos}`}
-          position={[marker.position.x + 0.22, marker.position.y + 0.18, marker.position.z + 0.04]}
-          size={0.1}
-          width={0.37}
-          color="#f6f0e5"
-        />
-      ))}
+      {hardware.tops.map((marker) => {
+        const overflow = Math.max(0, marker.level - (COLUMN_VISIBLE_CAP - 1));
+        const topY = marker.position.y - overflow * FLAG_PITCH + 0.18;
+        return (
+          <Glyph
+            key={marker.column}
+            text={`@${marker.pos}`}
+            position={[marker.position.x + 0.22, topY, marker.position.z + 0.04]}
+            size={0.1}
+            width={0.37}
+            color="#f6f0e5"
+          />
+        );
+      })}
     </group>
   );
 }

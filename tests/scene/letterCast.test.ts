@@ -334,4 +334,31 @@ describe('letter cast', () => {
       expect(pt.y).toBeLessThanOrEqual(-5.5);
     }
   });
+
+  it('routes catastrophic truncated runs from the hopper through the machine and drains to REJECT', () => {
+    const cases: [string, string][] = [
+      ['^(a+)+$', `${'a'.repeat(16)}!`],
+      ['.*(?:.*=.*)', 'x'.repeat(120)],
+    ];
+    for (const [pattern, input] of cases) {
+      const program = parsePattern(pattern, '');
+      const { trace, result } = runBacktrack(program, input, { maxSteps: 20_000, wallMs: 1000 });
+      expect(result.gaveUp || trace.truncated).toBe(true);
+      const machine = layout(program);
+      const timeline = buildTimeline(trace, machine);
+      const cast = compileCast(trace, timeline, machine, input, false);
+      const hopper = pieceAt(machine, 'hopper');
+      const reject = pieceAt(machine, 'rejectTray');
+      const start = castAt(cast, 0, null);
+      for (const place of start) {
+        expect(place.kind).toBe('hold');
+        expect(near(place.position, hopper, 1.2)).toBe(true);
+      }
+      const done = endAt(cast);
+      for (const place of done) {
+        expect(place.kind).toBe('reject');
+        expect(near(place.position, reject)).toBe(true);
+      }
+    }
+  });
 });

@@ -9,6 +9,7 @@ import { Ride } from './ride.ts';
 
 const LIFT = MARBLE_LIFT;
 const TILES = 36;
+export const CAST_EVENT_LIMIT = 2048;
 const LOOP: ReadonlySet<PieceKind> = new Set(['bypassChute', 'returnRail', 'loopLift', 'backLift']);
 
 export type CastKind = 'hold' | 'follow' | 'approach' | 'park' | 'discard' | 'reject' | 'cup';
@@ -88,22 +89,29 @@ function edgeMap(layout: MachineLayout): Map<string, number> {
 }
 
 export function hiddenLoopPieces(layout: MachineLayout, timeline: Timeline | null): Set<number> {
+  const loopIndices: number[] = [];
+  layout.pieces.forEach((piece, index) => {
+    if (LOOP.has(piece.kind)) loopIndices.push(index);
+  });
+  if (loopIndices.length === 0) return new Set();
+  if (!timeline) return new Set(loopIndices);
   const used = new Set<number>();
   const edges = edgeMap(layout);
-  if (timeline) {
-    for (const segment of timeline.segments) {
-      const route = segment.route;
-      if (!route) continue;
-      for (let i = 1; i < route.length; i++) {
-        const piece = edges.get(`${route[i - 1]}:${route[i]}`);
-        if (piece !== undefined && LOOP.has(layout.pieces[piece]?.kind)) used.add(piece);
+  for (const segment of timeline.segments) {
+    const route = segment.route;
+    if (!route) continue;
+    for (let i = 1; i < route.length; i++) {
+      const piece = edges.get(`${route[i - 1]}:${route[i]}`);
+      if (piece !== undefined && LOOP.has(layout.pieces[piece]?.kind)) {
+        used.add(piece);
+        if (used.size === loopIndices.length) return new Set();
       }
     }
   }
   const hidden = new Set<number>();
-  layout.pieces.forEach((piece, index) => {
-    if (LOOP.has(piece.kind) && !used.has(index)) hidden.add(index);
-  });
+  for (const index of loopIndices) {
+    if (!used.has(index)) hidden.add(index);
+  }
   return hidden;
 }
 
@@ -136,10 +144,17 @@ function returnToHopperPolyline(layout: MachineLayout, from: Vec3, to: Vec3): Ve
 }
 
 function activeSpan(spans: CastSpan[], time: number): CastSpan {
+  let lo = 0;
+  let hi = spans.length - 1;
   let chosen = spans[0];
-  for (const span of spans) {
-    if (span.t0 > time) break;
-    chosen = span;
+  while (lo <= hi) {
+    const mid = (lo + hi) >>> 1;
+    if (spans[mid].t0 <= time) {
+      chosen = spans[mid];
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
   }
   return chosen;
 }
@@ -193,8 +208,8 @@ function coveredTiles(tiles: Tile[], pos: number, len: number): number[] {
   return found;
 }
 
-function continues(trace: Trace, event: number, pos: number): boolean {
-  for (let j = event + 1; j < trace.length; j++) {
+function continues(trace: Trace, event: number, pos: number, limit: number): boolean {
+  for (let j = event + 1; j < limit; j++) {
     const kind = trace.t[j] as T;
     if (kind === T.iter || kind === T.look || kind === T.capture) continue;
     if (kind === T.backtrack) return trace.c[j] === pos;
@@ -245,31 +260,71 @@ export function compileCast(
   const reject = pieceAt(layout, 'rejectTray') ?? { x: 3, y: -8, z: 0 };
   const edges = edgeMap(layout);
   const rideSpline = new Ride(layout);
+  const splineCache = new Map<string, Vec3[]>();
+  const liftedSpline = (route: number[]): Vec3[] => {
+    const key = route.join(':');
+    let cached = splineCache.get(key);
+    if (!cached) {
+      cached = rideSpline.points(route).map(lifted);
+      splineCache.set(key, cached);
+    }
+    return cached;
+  };
   const hopperStart = endpointStart(layout, 'hopper');
   const cupEnd = endpoint(layout, 'cup');
   const speed = Number.isFinite(timeline.speed) && timeline.speed > 0 ? timeline.speed : 1;
   const msPerUnit = timeline.collapsed ? 0 : ROLL_PER_UNIT_MS / speed;
   const releaseStaggerMs = timeline.collapsed ? 0 : 135 / speed;
 
-  const byEvent: Segment[][] = Array.from({ length: trace.length }, () => []);
+  const eventLimit = Math.min(trace.length, CAST_EVENT_LIMIT);
+  const byEvent: Segment[][] = Array.from({ length: eventLimit }, () => []);
   for (const segment of timeline.segments) {
-    if (segment.event >= 0 && segment.event < trace.length) byEvent[segment.event].push(segment);
+    if (segment.event >= eventLimit) break;
+    if (segment.event >= 0) byEvent[segment.event].push(segment);
   }
   const tests: number[][] = tiles.map(() => []);
+  const attemptBoundaries: number[] = [];
   let matchStart = -1;
   let matchEnd = -1;
-  for (let i = 0; i < trace.length; i++) {
+  for (let i = 0; i < eventLimit; i++) {
     const kind = trace.t[i] as T;
-    if (kind === T.test && trace.d[i] > 0) {
+    if (kind === T.test && trace.d[i] > 0 && layout.anchors[trace.a[i]]?.gate) {
       for (const tile of coveredTiles(tiles, trace.b[i], trace.d[i])) tests[tile].push(i);
-    } else if (kind === T.match) {
-      matchStart = trace.a[i];
-      matchEnd = trace.b[i];
+    } else if (kind === T.attempt || kind === T.match || kind === T.nomatch) {
+      attemptBoundaries.push(i);
+      if (kind === T.match) {
+        matchStart = trace.a[i];
+        matchEnd = trace.b[i];
+      }
     }
   }
-  const retestedAfter = (tile: number, event: number): boolean => {
+  attemptBoundaries.push(eventLimit);
+  if (matchStart < 0 && trace.length > 0 && (trace.t[trace.length - 1] as T) === T.match) {
+    const last = trace.length - 1;
+    matchStart = trace.a[last];
+    matchEnd = trace.b[last];
+  }
+  const testCursor: number[] = tiles.map(() => 0);
+  let attemptCursor = 0;
+  const advanceCursors = (event: number): void => {
+    while (attemptCursor < attemptBoundaries.length && attemptBoundaries[attemptCursor] <= event) {
+      attemptCursor++;
+    }
+    for (let t = 0; t < tiles.length; t++) {
+      const list = tests[t];
+      while (testCursor[t] < list.length && list[testCursor[t]] <= event) {
+        testCursor[t]++;
+      }
+    }
+  };
+  const retestedAfter = (tile: number): boolean => testCursor[tile] < tests[tile].length;
+  const nextTestInAttempt = (tile: number): number | null => {
+    const idx = testCursor[tile];
     const list = tests[tile];
-    return list.length > 0 && list[list.length - 1] > event;
+    if (idx >= list.length) return null;
+    const nextEvent = list[idx];
+    const attemptEnd = attemptBoundaries[attemptCursor] ?? eventLimit;
+    return nextEvent < attemptEnd ? trace.a[nextEvent] : null;
   };
   const inMatch = (tile: number): boolean =>
     matchStart >= 0 && tiles[tile].index < matchEnd && tiles[tile].index + tiles[tile].length > matchStart;
@@ -365,7 +420,7 @@ export function compileCast(
     if (!route) throw new Error('Missing rejection track for marble');
     releaseGateSlot(tile);
     const to = rejectAt();
-    moveTile(tile, startTime, null, 'discard', [...rideSpline.points(route).map(lifted), to], 'reject', route);
+    moveTile(tile, startTime, null, 'discard', [...liftedSpline(route), to], 'reject', route);
     mode[tile] = 'reject';
     tilePoint[tile] = null;
   };
@@ -409,17 +464,6 @@ export function compileCast(
     return poseForSegment(layout, segment, 0)?.position ?? null;
   };
 
-  const nextTestInAttempt = (tile: number, afterEvent: number): number | null => {
-    for (let j = afterEvent + 1; j < trace.length; j++) {
-      const k = trace.t[j] as T;
-      if (k === T.attempt || k === T.match || k === T.nomatch) return null;
-      if (k === T.test && trace.d[j] > 0) {
-        if (coveredTiles(tiles, trace.b[j], trace.d[j]).includes(tile)) return trace.a[j];
-      }
-    }
-    return null;
-  };
-
   const forwardRouteToNode = (fromPt: number | null, toNode: number): number[] | null => {
     if (fromPt === null) return null;
     const toPt = layout.anchors[toNode]?.entry;
@@ -434,7 +478,8 @@ export function compileCast(
     return path;
   };
 
-  for (let event = 0; event < trace.length; event++) {
+  for (let event = 0; event < eventLimit; event++) {
+    advanceCursors(event);
     const kind = trace.t[event] as T;
     const win = windowOf(event);
     const segs = byEvent[event];
@@ -446,7 +491,7 @@ export function compileCast(
       for (let tile = 0; tile < tiles.length; tile++) {
         if (mode[tile] === 'hold' || mode[tile] === 'reject') continue;
         const startT = win.t0 + releaseIndex++ * releaseStaggerMs;
-        if (retestedAfter(tile, event)) {
+        if (retestedAfter(tile)) {
           releaseGateSlot(tile);
           const back = holdAt(tile);
           moveTile(
@@ -486,7 +531,7 @@ export function compileCast(
         extendChain(anchor?.exit);
         continue;
       }
-      const kept = continues(trace, event, pos);
+      const kept = continues(trace, event, pos, eventLimit);
       const covered = coveredTiles(tiles, pos, len);
       for (const tile of covered) {
         if (mode[tile] === 'reject') continue;
@@ -494,7 +539,7 @@ export function compileCast(
         const r = routeForTile(tile, anchor.entry);
         const entrySpline =
           r.length >= 2
-            ? rideSpline.points(r).map(lifted)
+            ? liftedSpline(r)
             : [lifted(layout.graph.points[anchor.entry].position)];
         if (ok) {
           const slotPos = claimGateSlot(tile, node, gate);
@@ -503,8 +548,9 @@ export function compileCast(
           tilePoint[tile] = anchor.exit;
           continue;
         }
-        const nextNode = retestedAfter(tile, event) ? nextTestInAttempt(tile, event) : null;
-        if (kept || (nextNode !== null && forwardRouteToNode(anchor.exit, nextNode) !== null)) {
+        const retested = retestedAfter(tile);
+        const nextNode = retested ? nextTestInAttempt(tile) : null;
+        if (nextNode !== null && (kept || forwardRouteToNode(anchor.exit, nextNode) !== null)) {
           const exitPos = lifted(layout.graph.points[anchor.exit].position);
           moveTile(tile, null, gateT1, 'follow', [...entrySpline, lifted(gate), exitPos], 'follow');
           mode[tile] = 'follow';
@@ -512,7 +558,7 @@ export function compileCast(
           continue;
         }
         const arrivedT = moveTile(tile, null, gateT0, 'follow', [...entrySpline, lifted(gate)], 'follow');
-        if (retestedAfter(tile, event)) {
+        if (retested) {
           const back = holdAt(tile);
           moveTile(
             tile,
@@ -543,8 +589,8 @@ export function compileCast(
       for (let other = 0; other < tiles.length; other++) {
         if (other === tile || tiles[other].index < pos) continue;
         if (mode[other] !== 'park' && mode[other] !== 'follow') continue;
-        if (retestedAfter(other, event)) {
-          const nextNode = nextTestInAttempt(other, event);
+        if (retestedAfter(other)) {
+          const nextNode = nextTestInAttempt(other);
           if (nextNode !== null && forwardRouteToNode(tilePoint[other], nextNode) !== null) {
             continue;
           }
@@ -567,10 +613,10 @@ export function compileCast(
         }
       }
       if (tile !== null && mode[tile] !== 'reject' && mode[tile] !== 'hold') {
-        const nextNode = nextTestInAttempt(tile, event);
+        const nextNode = nextTestInAttempt(tile);
         const stayParkedAtGate =
-          mode[tile] === 'park' &&
-          (nextNode === null || forwardRouteToNode(tilePoint[tile], nextNode) !== null);
+          nextNode === null ||
+          (mode[tile] === 'park' && forwardRouteToNode(tilePoint[tile], nextNode) !== null);
         if (!stayParkedAtGate) {
           releaseGateSlot(tile);
           const anchorEntry = layout.anchors[trace.a[event]]?.entry;
@@ -582,7 +628,7 @@ export function compileCast(
                 : [];
           if (route.length >= 2) {
             const endPt = route[route.length - 1];
-            const spline = rideSpline.points(route).map(lifted);
+            const spline = liftedSpline(route);
             moveTile(tile, win.t0, null, 'follow', spline, 'follow');
             mode[tile] = 'follow';
             tilePoint[tile] = endPt;
@@ -627,6 +673,24 @@ export function compileCast(
         const startT = win.t0 + releaseIndex++ * releaseStaggerMs;
         rejectTile(tile, startT);
       }
+    }
+  }
+
+  const lastEventKind = eventLimit > 0 ? (trace.t[eventLimit - 1] as T) : null;
+  if (lastEventKind !== T.match && lastEventKind !== T.nomatch) {
+    let drainStart = 0;
+    for (let i = eventLimit - 1; i >= 0; i--) {
+      const segs = byEvent[i];
+      if (segs.length > 0) {
+        drainStart = segs[segs.length - 1].t1;
+        break;
+      }
+    }
+    let releaseIndex = 0;
+    for (let tile = 0; tile < tiles.length; tile++) {
+      if (mode[tile] === 'hold' || mode[tile] === 'reject') continue;
+      const startT = drainStart + releaseIndex++ * releaseStaggerMs;
+      rejectTile(tile, startT);
     }
   }
 

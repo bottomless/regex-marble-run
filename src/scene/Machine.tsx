@@ -143,7 +143,7 @@ export default function Machine({
       )}
       <group ref={building} position={[0, 0.6, 0]} scale={metrics.scale}>
         <group position={metrics.offset}>
-          {input.length > 0 && !flood ? (
+          {input.length > 0 ? (
             store ? (
               <LetterTracks store={store} machine={machine} materials={materials} />
             ) : (
@@ -175,27 +175,25 @@ export default function Machine({
                 emphasis={Math.min(1.3, Math.max(1, 0.75 / metrics.scale))}
                 input={input}
                 unicode={program.flags.unicode || program.flags.unicodeSets}
-                showBody={Boolean(flood) || input.length === 0}
+                showBody={input.length === 0}
               />
-              {!flood && (
-                <InputFlow
-                  store={store}
-                  machine={machine}
-                  input={input}
-                  unicode={program.flags.unicode || program.flags.unicodeSets}
-                  materials={materials}
-                />
-              )}
+              <InputFlow
+                store={store}
+                machine={machine}
+                input={input}
+                unicode={program.flags.unicode || program.flags.unicodeSets}
+                materials={materials}
+              />
               <Springs
                 store={store}
                 machine={machine}
                 materials={materials}
-                hero={Boolean(flood) || input.length === 0}
-                input={flood ? '' : input}
+                hero={input.length === 0}
+                input={input}
                 unicode={program.flags.unicode || program.flags.unicodeSets}
-                usedOnly={input.length > 0 && !flood}
+                usedOnly={input.length > 0}
               />
-              {!flood && <Flags store={store} machine={machine} materials={materials} />}
+              <Flags store={store} machine={machine} materials={materials} />
               <Alternations
                 program={program}
                 store={store}
