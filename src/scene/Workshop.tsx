@@ -12,6 +12,7 @@ import { usePlaybackController, type ViewMode } from '../playback/usePlayback.ts
 import type { PlaybackStore } from '../playback/store.ts';
 import { tileStatus } from '../playback/tiles.ts';
 import { captureSpans } from '../playback/captures.ts';
+import { outcomeOf } from '../playback/outcome.ts';
 import Transport from '../playback/Transport.tsx';
 import Hud from '../playback/Hud.tsx';
 import MachineParts from '../ui/MachineParts.tsx';
@@ -104,6 +105,31 @@ function Scene({
         canvas.setAttribute('data-lit-tiles', '');
         canvas.setAttribute('data-captures', '[]');
       }
+      const verdict = outcomeOf(s);
+      highlightStore.getState().setVerdict(verdict);
+      if (verdict.kind === 'match') {
+        highlightStore.getState().setReading({
+          phase: 'matched',
+          attemptStart: verdict.start,
+          head: verdict.end,
+          match: { start: verdict.start, end: verdict.end },
+          captures: s.machine?.phase === 'matched' ? captureSpans(s.machine) : [],
+        });
+      } else if (verdict.kind !== 'pending') {
+        highlightStore
+          .getState()
+          .setReading({ phase: 'nomatch', attemptStart: 0, head: 0, match: null, captures: [] });
+      } else if (s.machine) {
+        highlightStore.getState().setReading({
+          phase: s.machine.phase,
+          attemptStart: s.machine.attemptStart,
+          head: s.machine.head,
+          match: s.machine.match,
+          captures: captureSpans(s.machine),
+        });
+      } else {
+        highlightStore.getState().setReading(null);
+      }
     };
     mirror(store.getState());
     const unsubscribe = store.subscribe(mirror);
@@ -111,6 +137,8 @@ function Scene({
       unsubscribe();
       highlightStore.getState().setActive(null);
       highlightStore.getState().setHover(null);
+      highlightStore.getState().setReading(null);
+      highlightStore.getState().setVerdict({ kind: 'pending' });
     };
   }, [canvas, machine, program, store, input]);
   const flood = useFloodModel(store);

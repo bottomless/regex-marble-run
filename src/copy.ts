@@ -37,7 +37,8 @@ export const copy = {
   editorHint: 'Edit below. The machine updates as you type.',
   noFlags: 'None',
   emptyInput: 'Empty string',
-  marbleHint: 'Each letter is a marble. It rides to the gate that tests it. A miss falls into Reject. A match rolls to the cup.',
+  marbleHint:
+    'Each letter is a marble. It rides to the gate that tests it. A miss falls into Reject. A match rolls to the cup.',
   controls: 'Pattern and test string controls',
   machine: 'Regular expression machine',
   building: 'Building the machine…',
@@ -125,6 +126,17 @@ export const copy = {
     unset: 'unset',
     status: { playing: 'Playing', paused: 'Paused', finished: 'Finished', loading: 'Running the engine…' },
     help: 'What do these mean?',
+  },
+  verdict: {
+    stamp: { match: 'Match', nomatch: 'No match', gaveUp: 'Gave up' },
+    sign: { pending: 'DOES IT MATCH?', match: 'MATCH', nomatch: 'NO MATCH', gaveUp: 'GAVE UP' },
+    signMatch: (text: string) => (text.length === 0 ? 'MATCH · empty' : `MATCH “${text}”`),
+    describe: (kind: 'match' | 'nomatch' | 'gaveUp', text: string) =>
+      kind === 'match'
+        ? `The pattern matches “${text}”.`
+        : kind === 'nomatch'
+          ? 'The pattern does not match this string.'
+          : 'The engine gave up before finding an answer.',
   },
   toolsLabel: 'Engines and sharing',
   parts: {

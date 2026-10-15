@@ -61,6 +61,9 @@ export interface TrackBatch {
   geometry: BufferGeometry;
 }
 
+/** Height the verdict sign adds above the backboard's top rail; the camera frames it too. */
+export const SIGN_RISE = 0.95;
+
 export function displayMetrics(machine: MachineLayout, options: { flood?: boolean } = {}): DisplayMetrics {
   const { min, max } = machine.bounds;
   const width = Math.max(1, max.x - min.x);

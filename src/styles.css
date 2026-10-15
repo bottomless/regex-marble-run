@@ -433,6 +433,112 @@ summary:hover {
   border-radius: 999px;
   background: var(--paper);
   box-shadow: var(--shadow);
+  transition:
+    border-color 200ms ease,
+    box-shadow 200ms ease;
+}
+
+.string-editor[data-verdict='match'] {
+  border-color: var(--teal);
+  box-shadow:
+    0 0 0 1px var(--teal),
+    0 0 0 5px rgb(36 123 118 / 14%),
+    var(--shadow);
+}
+
+.string-editor[data-verdict='nomatch'] {
+  border-color: var(--vermilion);
+  box-shadow:
+    0 0 0 1px var(--vermilion),
+    0 0 0 5px rgb(182 72 50 / 12%),
+    var(--shadow);
+}
+
+.string-editor[data-verdict='gaveUp'] {
+  border-color: var(--brass);
+  box-shadow:
+    0 0 0 1px var(--brass),
+    0 0 0 5px rgb(136 101 43 / 14%),
+    var(--shadow);
+}
+
+.string-editor[data-verdict='match'] .string-label {
+  color: var(--teal);
+}
+
+.string-editor[data-verdict='nomatch'] .string-label {
+  color: var(--vermilion);
+}
+
+.string-editor[data-verdict='nomatch'] .string-backdrop mark[data-tone='tried'] {
+  opacity: 0.7;
+  text-decoration: line-through 1.5px var(--vermilion);
+}
+
+.verdict-stamp {
+  display: none;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 5px;
+  margin-right: -8px;
+  padding: 4px 10px 4px 8px;
+  border-radius: 999px;
+  color: #fcfaf4;
+  font: 700 11px / 1 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.verdict-stamp[data-verdict='match'],
+.verdict-stamp[data-verdict='nomatch'],
+.verdict-stamp[data-verdict='gaveUp'] {
+  display: inline-flex;
+  animation: verdict-pop 360ms cubic-bezier(0.2, 1.4, 0.4, 1) both;
+}
+
+.verdict-stamp[data-verdict='match'] {
+  background: var(--teal);
+}
+
+.verdict-stamp[data-verdict='nomatch'] {
+  background: var(--vermilion);
+}
+
+.verdict-stamp[data-verdict='gaveUp'] {
+  background: var(--brass);
+}
+
+.workshop-shell[data-theme='dark'] .verdict-stamp {
+  color: #22231f;
+}
+
+.verdict-stamp svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@keyframes verdict-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .verdict-stamp[data-verdict] {
+    animation: none;
+  }
 }
 
 .string-label {
@@ -444,7 +550,77 @@ summary:hover {
   user-select: none;
 }
 
+.string-field {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  font: 14px / 1.5 var(--mono);
+}
+
+.string-backdrop {
+  position: absolute;
+  inset: 0;
+  padding: 8px 0;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  font: inherit;
+  color: var(--ink);
+  pointer-events: none;
+}
+
+.string-backdrop mark {
+  border-radius: 2px;
+  background: transparent;
+  color: inherit;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.string-backdrop mark[data-tone='tried'] {
+  color: var(--muted);
+  opacity: 0.55;
+}
+
+.string-backdrop mark[data-tone='read'] {
+  background: rgb(51 90 162 / 18%);
+}
+
+.string-backdrop mark[data-tone='head'] {
+  background: rgb(182 72 50 / 20%);
+  outline: 1px solid var(--vermilion);
+}
+
+.string-backdrop mark[data-tone='match'] {
+  background: rgb(201 163 92 / 42%);
+  outline: 1px solid var(--brass);
+}
+
+.string-backdrop mark[data-group] {
+  text-decoration: underline 2px;
+  text-underline-offset: 3px;
+}
+
+.string-backdrop mark[data-group='1'] {
+  text-decoration-color: #9b4a86;
+}
+
+.string-backdrop mark[data-group='2'] {
+  text-decoration-color: #b8762f;
+}
+
+.string-backdrop mark[data-group='3'] {
+  text-decoration-color: #4a62a8;
+}
+
+.string-backdrop mark[data-group='4'] {
+  text-decoration-color: #a3503a;
+}
+
 .string-editor textarea {
+  position: relative;
   display: block;
   flex: 1;
   width: 100%;
@@ -457,7 +633,14 @@ summary:hover {
   border: 0;
   outline: none;
   background: transparent;
-  font: 14px / 1.5 var(--mono);
+  font: inherit;
+  color: transparent;
+  caret-color: var(--vermilion);
+  scrollbar-width: none;
+}
+
+.string-editor textarea::selection {
+  background: rgb(51 90 162 / 28%);
 }
 
 .pattern-options {
@@ -1682,10 +1865,13 @@ summary:hover {
     min-height: 44px;
   }
 
+  .string-field {
+    font-size: 16px;
+  }
+
   .string-editor textarea {
     height: 42px;
     min-height: 42px;
-    font-size: 16px;
   }
 
   .workshop-stage {

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { nodeAtIndex, nodesWithin, segmentPattern, spanForNode } from '../../src/ui/highlight.ts';
+import {
+  nodeAtIndex,
+  nodesWithin,
+  segmentInput,
+  segmentPattern,
+  spanForNode,
+} from '../../src/ui/highlight.ts';
 import { parsePattern } from '../../src/engine/parse.ts';
 import { walk } from '../../src/engine/ir.ts';
 
@@ -57,5 +63,69 @@ describe('pattern↔piece highlighting (M8)', () => {
   it('segmentPattern clamps out-of-range spans instead of throwing', () => {
     const segments = segmentPattern('ab', [-5, 99], null);
     expect(segments).toEqual([{ text: 'ab', tone: 'hover' }]);
+  });
+});
+
+describe('test-string highlighting', () => {
+  const base = { attemptStart: 0, head: 0, match: null, captures: [] };
+  const tones = (input: string, reading: Parameters<typeof segmentInput>[1]) =>
+    segmentInput(input, reading).map((segment) => [segment.text, segment.tone]);
+
+  it('leaves the string plain before playback, with a trailing end-of-string slot', () => {
+    expect(tones('abc', null)).toEqual([
+      ['abc', null],
+      [' ', null],
+    ]);
+  });
+
+  it('marks failed start positions, the live read span and the head', () => {
+    expect(tones('xxabc', { ...base, phase: 'running', attemptStart: 2, head: 4 })).toEqual([
+      ['xx', 'tried'],
+      ['ab', 'read'],
+      ['c', 'head'],
+      [' ', null],
+    ]);
+    expect(tones('ab', { ...base, phase: 'running', attemptStart: 0, head: 2 }).at(-1)).toEqual([
+      ' ',
+      'head',
+    ]);
+  });
+
+  it('gilds the final match and dims everything on no match', () => {
+    const matched = {
+      ...base,
+      phase: 'matched' as const,
+      attemptStart: 1,
+      head: 3,
+      match: { start: 1, end: 3 },
+    };
+    expect(tones('xaby', matched)).toEqual([
+      ['x', 'tried'],
+      ['ab', 'match'],
+      ['y', null],
+      [' ', null],
+    ]);
+    expect(tones('ab', { ...base, phase: 'nomatch', attemptStart: 2, head: 2 })[0]).toEqual(['ab', 'tried']);
+  });
+
+  it('tags runs with the innermost capture group', () => {
+    const segments = segmentInput('abcd', {
+      ...base,
+      phase: 'matched',
+      head: 4,
+      match: { start: 0, end: 4 },
+      captures: [
+        { start: 0, end: 4 },
+        { start: 0, end: 3 },
+        { start: 1, end: 2 },
+      ],
+    });
+    expect(segments.map((segment) => [segment.text, segment.group])).toEqual([
+      ['a', 1],
+      ['b', 2],
+      ['c', 1],
+      ['d', null],
+      [' ', null],
+    ]);
   });
 });

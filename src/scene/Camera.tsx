@@ -3,7 +3,7 @@ import { useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { MathUtils, PerspectiveCamera, Plane, Ray, Spherical, Vector2, Vector3 } from 'three';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
-import type { DisplayMetrics } from './geometry.ts';
+import { SIGN_RISE, type DisplayMetrics } from './geometry.ts';
 
 export interface CameraProps {
   metrics: DisplayMetrics;
@@ -12,7 +12,8 @@ export interface CameraProps {
 }
 
 export function cameraPose(metrics: DisplayMetrics, aspect: number, fov = 36) {
-  const target = new Vector3(0, (metrics.height + 1.6) / 2, 0);
+  const top = metrics.height + 1.6 + SIGN_RISE;
+  const target = new Vector3(0, top / 2, 0);
   const direction = new Vector3(0.08, 0.17, 1).normalize();
   const right = new Vector3().crossVectors(new Vector3(0, 1, 0), direction).normalize();
   const up = new Vector3().crossVectors(direction, right);
@@ -21,7 +22,7 @@ export function cameraPose(metrics: DisplayMetrics, aspect: number, fov = 36) {
   let distance = 1;
 
   const bounds = [
-    { width: metrics.width, depth: metrics.depth, bottom: 0.6, top: metrics.height + 1.6 },
+    { width: metrics.width, depth: metrics.depth, bottom: 0.6, top },
     { width: metrics.boardWidth, depth: metrics.boardDepth, bottom: 0.1, top: 0.3 },
   ];
   for (const { width, depth, bottom, top } of bounds) {

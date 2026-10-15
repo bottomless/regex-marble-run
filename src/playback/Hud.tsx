@@ -4,7 +4,8 @@ import { countersAt, waterlineAt } from './counters.ts';
 import { shouldFlood } from './flood.ts';
 import { syncLinear } from './linear.ts';
 import { captureSpans } from './captures.ts';
-import { copy, type ResultReading } from '../copy.ts';
+import { copy } from '../copy.ts';
+import { outcomeOf } from './outcome.ts';
 import type { Program } from '../engine/ir.ts';
 import { palette } from '../scene/materials.ts';
 
@@ -53,12 +54,7 @@ export default function Hud({ store, reducedMotion, program, input = '', onHelp 
     rightTests = sync.tick ? sync.tick.cumulativeTests - (sync.finished ? 0 : sync.tick.tests) : 0;
   }
 
-  let outcome: ResultReading = { kind: 'pending' };
-  if (result && !filling && (atEnd || flood)) {
-    if (result.gaveUp) outcome = { kind: 'gaveUp' };
-    else if (result.matched) outcome = { kind: 'match', start: result.index, end: result.end };
-    else outcome = { kind: 'nomatch' };
-  }
+  const outcome = outcomeOf({ result, trace, atEnd, flood: floodFrame, machine });
   const status = !trace
     ? copy.hud.status.loading
     : filling

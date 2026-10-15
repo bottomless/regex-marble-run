@@ -1,16 +1,12 @@
-import { useMemo, useRef } from 'react';
+import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { RoundedBox } from '@react-three/drei';
-import { useStore } from 'zustand';
 import type { Group } from 'three';
 import type { Program } from '../engine/ir.ts';
 import type { MachineLayout } from '../layout/pieces.ts';
 import type { PlaybackStore } from '../playback/store.ts';
-import { tileStatus } from '../playback/tiles.ts';
-import { scoutTiles, scoutWindow } from '../playback/scout.ts';
-import { captureBrackets, matchSpan } from '../playback/captures.ts';
 import { copy } from '../copy.ts';
-import { displayMetrics, visibleTiles } from './geometry.ts';
+import { displayMetrics } from './geometry.ts';
 import type { DisplayMetrics } from './geometry.ts';
 import type { Materials } from './materials.ts';
 import Tracks, { LetterTracks } from './Tracks.tsx';
@@ -28,188 +24,9 @@ import Scout from './Scout.tsx';
 import Mirrors from './Mirrors.tsx';
 import Celebration from './Celebration.tsx';
 import Flood from './Flood.tsx';
+import { VerdictGlow, VerdictSign } from './Verdict.tsx';
 import type { FloodModel } from '../playback/flood.ts';
 import type { FlagEntry } from '../playback/state.ts';
-
-function LiveTileRail({
-  input,
-  unicode,
-  metrics,
-  materials,
-  store,
-  program,
-}: {
-  input: string;
-  unicode: boolean;
-  metrics: DisplayMetrics;
-  materials: Materials;
-  store: PlaybackStore;
-  program: Program;
-}) {
-  const machineState = useStore(store, (s) => s.machine);
-  const count = Math.min(24, Math.floor((metrics.boardWidth - 1) / 0.4));
-  const tiles = visibleTiles(input, unicode, count);
-  const pitch = Math.min(0.62, (metrics.boardWidth - 1) / Math.max(1, tiles.length));
-  const front = metrics.boardDepth / 2 - 0.27;
-  const ghosts = useMemo(() => new Set(scoutTiles(scoutWindow(machineState))), [machineState]);
-  const brackets = useMemo(() => captureBrackets(program, machineState), [program, machineState]);
-  const span = useMemo(() => matchSpan(machineState), [machineState]);
-  const xAt = (pos: number): number | null => {
-    const i = tiles.findIndex((tile) => pos >= tile.index && pos < tile.index + tile.glyph.length);
-    if (i < 0) return null;
-    const frac = (pos - tiles[i].index) / tiles[i].glyph.length;
-    return (i - (tiles.length - 1) / 2 - 0.5 + frac) * pitch;
-  };
-  return (
-    <group>
-      <mesh position={[0, 0.57, front - 0.1]} material={materials.tracks.edge} receiveShadow>
-        <boxGeometry args={[Math.max(1.2, tiles.length * pitch + 0.16), 0.06, 0.54]} />
-      </mesh>
-      {tiles.map((tile, i) => {
-        const status = tileStatus(machineState, tile.index);
-        const lit = status !== 'pending';
-        const isHead = status === 'head';
-        const gold = span !== null && tile.index >= span.start && tile.index < span.end;
-        return (
-          <group key={tile.index} position={[(i - (tiles.length - 1) / 2) * pitch, 0.73, front]}>
-            <RoundedBox
-              args={[pitch - 0.04, 0.32, 0.44]}
-              radius={0.03}
-              smoothness={2}
-              material={gold ? materials.brass : lit ? materials.tracks.cobalt : materials.tracks.birch}
-              castShadow
-            />
-            <Glyph
-              text={
-                tile.glyph === ' ' ? '·' : tile.glyph === '\n' ? '↵' : tile.glyph === '\t' ? '⇥' : tile.glyph
-              }
-              position={[0, 0.03, 0.23]}
-              size={0.27}
-              width={pitch - 0.06}
-              color={gold ? '#34372f' : lit ? '#f4efe2' : '#30362d'}
-            />
-            <Glyph text={String(tile.index)} position={[0, -0.145, 0.235]} size={0.07} color="#82745e" />
-            {isHead && (
-              <group position={[0, 0.2, 0.08]}>
-                <mesh position={[0, 0.26, 0]} material={materials.brass} castShadow>
-                  <cylinderGeometry args={[0.025, 0.025, 0.52, 8]} />
-                </mesh>
-                <mesh position={[0.14, 0.42, 0]} material={materials.tracks.vermilion} castShadow>
-                  <boxGeometry args={[0.28, 0.16, 0.03]} />
-                </mesh>
-                <mesh
-                  position={[0, 0.06, 0]}
-                  rotation={[0, 0, Math.PI]}
-                  material={materials.tracks.vermilion}
-                >
-                  <coneGeometry args={[0.1, 0.14, 4]} />
-                </mesh>
-              </group>
-            )}
-            {ghosts.has(tile.index) && (
-              <mesh position={[0, 0.21, 0]} material={materials.tracks.scout}>
-                <boxGeometry args={[pitch - 0.05, 0.07, 0.48]} />
-              </mesh>
-            )}
-          </group>
-        );
-      })}
-      {brackets.map((bracket) => {
-        const start = xAt(bracket.start);
-        const end = xAt(bracket.end);
-        if (start === null || end === null || end <= start) return null;
-        const center = (start + end) / 2;
-        const length = end - start;
-        return (
-          <group key={bracket.group} position={[center, 1.1, front]}>
-            <mesh material={materials.brass}>
-              <boxGeometry args={[length, 0.035, 0.05]} />
-            </mesh>
-            {[-1, 1].map((side) => (
-              <mesh key={side} position={[side * (length / 2), -0.09, 0]}>
-                <boxGeometry args={[0.035, 0.22, 0.05]} />
-                <meshStandardMaterial color={bracket.color} roughness={0.45} metalness={0.25} />
-              </mesh>
-            ))}
-            <Glyph
-              text={bracket.name ?? String(bracket.group)}
-              position={[0, 0.16, 0.02]}
-              size={0.11}
-              width={0.5}
-              color={bracket.color}
-            />
-          </group>
-        );
-      })}
-      {input.length > (tiles.at(-1)?.index ?? 0) + (tiles.at(-1)?.glyph.length ?? 0) && (
-        <Glyph text="…" position={[metrics.boardWidth / 2 - 0.4, 0.72, front + 0.19]} size={0.21} />
-      )}
-    </group>
-  );
-}
-
-function TileRail({
-  input,
-  unicode,
-  metrics,
-  materials,
-  store,
-  program,
-}: {
-  input: string;
-  unicode: boolean;
-  metrics: DisplayMetrics;
-  materials: Materials;
-  store?: PlaybackStore;
-  program: Program;
-}) {
-  const count = Math.min(24, Math.floor((metrics.boardWidth - 1) / 0.4));
-  const tiles = visibleTiles(input, unicode, count);
-  const pitch = Math.min(0.62, (metrics.boardWidth - 1) / Math.max(1, tiles.length));
-  const front = metrics.boardDepth / 2 - 0.27;
-  if (store) {
-    return (
-      <LiveTileRail
-        input={input}
-        unicode={unicode}
-        metrics={metrics}
-        materials={materials}
-        store={store}
-        program={program}
-      />
-    );
-  }
-  return (
-    <group>
-      <mesh position={[0, 0.57, front - 0.1]} material={materials.tracks.edge} receiveShadow>
-        <boxGeometry args={[Math.max(1.2, tiles.length * pitch + 0.16), 0.06, 0.54]} />
-      </mesh>
-      {tiles.map((tile, i) => (
-        <group key={tile.index} position={[(i - (tiles.length - 1) / 2) * pitch, 0.73, front]}>
-          <RoundedBox
-            args={[pitch - 0.04, 0.32, 0.44]}
-            radius={0.03}
-            smoothness={2}
-            material={materials.tracks.birch}
-            castShadow
-          />
-          <Glyph
-            text={
-              tile.glyph === ' ' ? '·' : tile.glyph === '\n' ? '↵' : tile.glyph === '\t' ? '⇥' : tile.glyph
-            }
-            position={[0, 0.03, 0.23]}
-            size={0.27}
-            width={pitch - 0.06}
-          />
-          <Glyph text={String(tile.index)} position={[0, -0.145, 0.235]} size={0.07} color="#82745e" />
-        </group>
-      ))}
-      {input.length > (tiles.at(-1)?.index ?? 0) + (tiles.at(-1)?.glyph.length ?? 0) && (
-        <Glyph text="…" position={[metrics.boardWidth / 2 - 0.4, 0.72, front + 0.19]} size={0.21} />
-      )}
-    </group>
-  );
-}
 
 export function Base({
   metrics,
@@ -315,6 +132,15 @@ export default function Machine({
   return (
     <group>
       <Base metrics={metrics} materials={materials} label={label} />
+      {store && (
+        <VerdictSign
+          store={store}
+          metrics={metrics}
+          materials={materials}
+          input={input}
+          reducedMotion={reducedMotion}
+        />
+      )}
       <group ref={building} position={[0, 0.6, 0]} scale={metrics.scale}>
         <group position={metrics.offset}>
           {input.length > 0 && !flood ? (
@@ -376,6 +202,12 @@ export default function Machine({
               <Scout store={store} machine={machine} materials={materials} />
               <Mirrors program={program} machine={machine} input={input} store={store} />
               <Celebration store={store} machine={machine} materials={materials} />
+              <VerdictGlow
+                store={store}
+                machine={machine}
+                materials={materials}
+                reducedMotion={reducedMotion}
+              />
             </>
           )}
         </group>
@@ -391,14 +223,6 @@ export default function Machine({
           reducedMotion={reducedMotion}
         />
       )}
-      <TileRail
-        input={input}
-        unicode={program.flags.unicode || program.flags.unicodeSets}
-        metrics={metrics}
-        materials={materials}
-        store={store}
-        program={program}
-      />
     </group>
   );
 }

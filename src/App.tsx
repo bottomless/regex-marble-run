@@ -17,6 +17,7 @@ import DebugLayout from './layout/DebugLayout.tsx';
 import { DEFAULT_PRESET, PRESETS, type Preset } from './presets.ts';
 import PatternField from './ui/PatternField.tsx';
 import PresetSheet from './ui/PresetSheet.tsx';
+import StringField from './ui/StringField.tsx';
 
 const Workshop = lazy(() => import('./scene/Workshop.tsx'));
 const LegendSheet = lazy(() => import('./ui/LegendSheet.tsx'));
@@ -295,22 +296,10 @@ function WorkshopApp() {
           )}
 
           <div className="field-row field-row--input">
-            <div className="string-editor">
-              <label htmlFor="test-string" className="string-label">
-                <span aria-hidden="true">STRING</span>
-                <span className="sr-only">{copy.inputLabel}</span>
-              </label>
-              <textarea
-                id="test-string"
-                rows={1}
-                value={input}
-                maxLength={STRING_MAX}
-                spellCheck={false}
-                autoComplete="off"
-                autoCapitalize="off"
-                onChange={(event) => setInput(event.target.value.slice(0, STRING_MAX))}
-              />
-            </div>
+            <StringField
+              value={input}
+              onChange={(event) => setInput(event.target.value.slice(0, STRING_MAX))}
+            />
           </div>
         </div>
       </section>
