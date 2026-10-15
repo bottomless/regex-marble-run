@@ -41,6 +41,7 @@ export function pieceColor(kind: PieceKind): string {
       return '#5aa9e6';
     case 'cup':
       return '#7ac74f';
+    case 'rejectChute':
     case 'rejectTray':
       return '#d94848';
     case 'module':
@@ -60,7 +61,7 @@ export function pieceShape(
   piece: Piece,
 ): { tag: 'path'; d: string } | { tag: 'rect'; x: number; y: number; w: number; h: number } {
   if (
-    ['track', 'loopLift', 'backLift', 'returnRail', 'bypassChute'].includes(piece.kind) &&
+    ['track', 'loopLift', 'backLift', 'returnRail', 'bypassChute', 'rejectChute'].includes(piece.kind) &&
     piece.points &&
     piece.points.length >= 2
   ) {

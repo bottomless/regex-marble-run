@@ -107,6 +107,15 @@ export function buildTimeline(trace: Trace, layout: MachineLayout, opts: Timelin
   const hopperPoint = layout.graph.edges.find((edge) => edge.piece === hopperPiece)?.from ?? null;
   const cupPiece = layout.pieces.findIndex((piece) => piece.kind === 'cup');
   const cupPoint = layout.graph.edges.find((edge) => edge.piece === cupPiece)?.to ?? null;
+  const { min, max } = layout.bounds;
+  const rejectionTravel = (max.x - min.x + max.y - min.y + max.z - min.z + 3.2) * ROLL_PER_UNIT_MS;
+  let visibleCount = 0;
+  for (let i = 0; i < trace.length; i++) {
+    if (trace.t[i] === T.test && trace.d[i] > 0) {
+      visibleCount = Math.min(36, Math.max(visibleCount, trace.b[i] + trace.d[i]));
+    }
+  }
+  const rejectionFinish = rejectionTravel + Math.max(0, visibleCount - 1) * 135;
   const segments: Segment[] = [];
   let t = 0;
   let currentPoint: number | null = null;
@@ -205,13 +214,13 @@ export function buildTimeline(trace: Trace, layout: MachineLayout, opts: Timelin
       case T.match: {
         const toCup = route(hopperPoint, cupPoint ?? undefined);
         const matchCount = Math.max(0, b - a);
-        const finishMs = Math.max(BASE_MS.finish, rollBase(layout, toCup, 2.0) + matchCount * 135);
+        const finishMs = Math.max(BASE_MS.finish, rollBase(layout, toCup, 2.0) + matchCount * 135, rejectionFinish);
         emit('finish', i, true, finishMs, null, { result: 'match', pos: a, len: b - a });
         break;
       }
       case T.nomatch: {
         const toCup = route(hopperPoint, cupPoint ?? undefined);
-        const finishMs = Math.max(BASE_MS.finish, rollBase(layout, toCup, 2.0));
+        const finishMs = Math.max(BASE_MS.finish, rollBase(layout, toCup, 2.0), rejectionFinish);
         emit('finish', i, true, finishMs, null, { result: 'reject' });
         break;
       }

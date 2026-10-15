@@ -3,7 +3,6 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { BackSide, MeshBasicMaterial, Vector3 } from 'three';
 import type { Group, Mesh } from 'three';
 import type { MachineLayout } from '../layout/pieces.ts';
-import { carriageAtIndex, carriedMarblePosition } from '../playback/carriage.ts';
 import type { PlaybackStore } from '../playback/store.ts';
 import { poseAtIndex } from '../playback/motion.ts';
 import { useStore } from 'zustand';
@@ -83,21 +82,17 @@ export default function Marble({
       if (group) group.visible = false;
       return;
     }
-    const riding = snapshot.timeline
-      ? carriageAtIndex(machine, snapshot.timeline, snapshot.segmentIndex, snapshot.fraction)
-      : null;
     const pose = snapshot.timeline
       ? poseAtIndex(machine, snapshot.timeline, snapshot.segmentIndex, snapshot.fraction)
       : null;
     if (pose && snapshot.timeline) {
-      const carried = riding
-        ? carriedMarblePosition(riding.rail)
-        : (ride.along(snapshot.timeline, snapshot.segmentIndex, snapshot.fraction) ?? pose.position);
+      const carried =
+        ride.along(snapshot.timeline, snapshot.segmentIndex, snapshot.fraction) ?? pose.position;
       group.visible = true;
       group.position.set(carried.x, carried.y + MARBLE_LIFT * emphasis, carried.z);
       const sphere = ball.current;
       const previous = last.current;
-      if (sphere && previous && pose.moving && !riding) {
+      if (sphere && previous && pose.moving) {
         const step = new Vector3().subVectors(group.position, previous);
         const distance = step.length();
         if (distance > 1e-5 && distance < 2) {

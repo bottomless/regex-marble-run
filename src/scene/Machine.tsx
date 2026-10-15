@@ -20,7 +20,7 @@ import Glyph from './Glyph.tsx';
 import Marble from './Marble.tsx';
 import InputFlow from './InputFlow.tsx';
 import Flags from './Flags.tsx';
-import Carriage from './Carriage.tsx';
+import Springs from './Springs.tsx';
 import Alternations from './Alternations.tsx';
 import Repeats from './Repeats.tsx';
 import GateLamps from './GateLamps.tsx';
@@ -360,7 +360,15 @@ export default function Machine({
                   materials={materials}
                 />
               )}
-              <Carriage store={store} machine={machine} materials={materials} />
+              <Springs
+                store={store}
+                machine={machine}
+                materials={materials}
+                hero={Boolean(flood) || input.length === 0}
+                input={flood ? '' : input}
+                unicode={program.flags.unicode || program.flags.unicodeSets}
+                usedOnly={input.length > 0 && !flood}
+              />
               {!flood && <Flags store={store} machine={machine} materials={materials} />}
               <Alternations program={program} store={store} machine={machine} materials={materials} />
               <Repeats program={program} store={store} machine={machine} materials={materials} />

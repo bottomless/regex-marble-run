@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { routePath, anchorOrder } from '../../src/layout/route.ts';
+import { routePath, anchorOrder, rejectionPath } from '../../src/layout/route.ts';
+import { layout } from '../../src/layout/layout.ts';
+import { parsePattern } from '../../src/engine/parse.ts';
 import type { LayoutGraph, NodeAnchor, TrackPoint } from '../../src/layout/pieces.ts';
 
 function pt(id: number, x: number, y: number, z = 0): TrackPoint {
@@ -181,6 +183,63 @@ describe('routePath', () => {
       ],
     );
     expect(routePath(g, 0, 3)).toEqual([0, 2, 3]);
+  });
+});
+
+describe('rejectionPath', () => {
+  it('takes the local rejection outlet even if a normal track offers a shorter path', () => {
+    const machine = layout(parsePattern('abc', ''));
+    const tray = machine.graph.edges.find((edge) => machine.pieces[edge.piece].kind === 'rejectTray')!;
+    const source = machine.anchors[0].exit;
+    const outlet = machine.graph.edges.find(
+      (edge) => edge.from === source && machine.pieces[edge.piece].kind === 'rejectChute',
+    )!;
+    machine.graph.edges.push({ from: source, to: tray.to, piece: 0, length: 0 });
+    expect(routePath(machine.graph, source, tray.to)).toEqual([source, tray.to]);
+    const route = rejectionPath(machine, source)!;
+    expect(route.slice(0, 2)).toEqual([source, outlet.to]);
+    expect(route.at(-1)).toBe(tray.to);
+    for (let i = 1; i < route.length; i++) {
+      const edge = machine.graph.edges.find((item) => item.from === route[i - 1] && item.to === route[i])!;
+      expect(['rejectChute', 'rejectTray']).toContain(machine.pieces[edge.piece].kind);
+    }
+    route.pop();
+    expect(rejectionPath(machine, source)!.at(-1)).toBe(tray.to);
+    expect(rejectionPath(machine, tray.to)).toEqual([tray.to]);
+  });
+
+  it('keeps holding drains terminal without changing exit or choice-entry rejection routes', () => {
+    const program = parsePattern('abcdefgh+', '');
+    const machine = layout(program);
+    const tray = machine.graph.edges.find((edge) => machine.pieces[edge.piece].kind === 'rejectTray')!;
+    const cup = machine.graph.edges.find((edge) => machine.pieces[edge.piece].kind === 'cup')!;
+    for (const anchor of Object.values(machine.anchors)) {
+      const sources = [anchor.exit];
+      if (anchor.diverter) sources.push(anchor.entry);
+      if (anchor.rejectionPort !== undefined) {
+        sources.push(anchor.rejectionPort);
+        expect(routePath(machine.graph, anchor.rejectionPort, cup.to)).toBeNull();
+        expect(routePath(machine.graph, machine.anchors[program.root.id].entry, anchor.rejectionPort)).toBeNull();
+      }
+      for (const source of sources) {
+        const route = rejectionPath(machine, source)!;
+        expect(route[0]).toBe(source);
+        expect(route.at(-1)).toBe(tray.to);
+        for (let i = 1; i < route.length; i++) {
+          const edge = machine.graph.edges.find((item) => item.from === route[i - 1] && item.to === route[i])!;
+          expect(['rejectChute', 'rejectTray']).toContain(machine.pieces[edge.piece].kind);
+        }
+      }
+    }
+  });
+
+  it('returns null for missing outlets or a missing tray instead of falling back to open air', () => {
+    const machine = layout(parsePattern('a', ''));
+    const hopper = machine.graph.edges.find((edge) => machine.pieces[edge.piece].kind === 'hopper')!;
+    expect(rejectionPath(machine, hopper.from)).toBeNull();
+    expect(rejectionPath(machine, -1)).toBeNull();
+    machine.graph.edges = machine.graph.edges.filter((edge) => machine.pieces[edge.piece].kind !== 'rejectTray');
+    expect(rejectionPath(machine, machine.anchors[0].exit)).toBeNull();
   });
 });
 

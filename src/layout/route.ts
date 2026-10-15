@@ -1,4 +1,4 @@
-import type { LayoutGraph, NodeAnchor, TrackEdge } from './pieces.ts';
+import type { LayoutGraph, MachineLayout, NodeAnchor, TrackEdge } from './pieces.ts';
 
 interface SourceRoutes {
   previous: number[];
@@ -121,6 +121,19 @@ export function routePath(graph: LayoutGraph, from: number, to: number): number[
   path.reverse();
   source.paths.set(to, path);
   return path.slice();
+}
+
+export function rejectionPath(layout: MachineLayout, from: number): number[] | null {
+  const { graph, pieces } = layout;
+  const tray = graph.edges.find((edge) => pieces[edge.piece]?.kind === 'rejectTray');
+  if (!tray) return null;
+  if (from === tray.to) return [from];
+  const outlet = graph.edges.find(
+    (edge) => edge.from === from && pieces[edge.piece]?.kind === 'rejectChute',
+  );
+  if (!outlet) return null;
+  const tail = routePath(graph, outlet.to, tray.to);
+  return tail ? [from, ...tail] : null;
 }
 
 function edgeLength(graph: LayoutGraph, edge: TrackEdge): number {

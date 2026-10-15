@@ -3,7 +3,7 @@ import { Vector3 } from 'three';
 import { parsePattern } from '../../src/engine/parse.ts';
 import { layout } from '../../src/layout/layout.ts';
 import { PRESETS } from '../../src/presets.ts';
-import { buildTrackBatches, displayMetrics, visibleTiles } from '../../src/scene/geometry.ts';
+import { buildTrackBatches, CHANNEL, displayMetrics, MARBLE_LIFT, REJECTION_CHANNEL, SPRING_COIL_RADIUS, SPRING_TUBE_RADIUS, springCoilGeometry, springLaunchers, sweepFrames, trackCurve, visibleTiles } from '../../src/scene/geometry.ts';
 import { cameraPose } from '../../src/scene/Camera.tsx';
 
 for (const preset of PRESETS) {
@@ -55,6 +55,93 @@ for (const preset of PRESETS) {
     });
   });
 }
+
+describe('rejection channels', () => {
+  it('uses muted wood for rejection beds and lips, including scout feeders and the tray inlet', () => {
+    const machine = layout(parsePattern('(?=(a|b)+)c', ''));
+    const chutes = machine.pieces.filter((piece) => piece.kind === 'rejectChute' || piece.kind === 'rejectTray');
+    expect(chutes.length).toBeGreaterThan(0);
+    const batches = buildTrackBatches({
+      ...machine,
+      pieces: chutes.map((piece) => ({ ...piece, role: 'look' })),
+    });
+    expect(batches.map((batch) => batch.finish)).toEqual(['edge']);
+    for (const batch of batches) {
+      expect(Array.from(batch.geometry.getAttribute('position').array).every(Number.isFinite)).toBe(true);
+      batch.geometry.dispose();
+    }
+  });
+
+  it('keeps the rejection bed clear of the marble on sloped feeders and vertical collectors', () => {
+    const machine = layout(parsePattern('abcdefgh', ''));
+    const chutes = machine.pieces.filter((piece) => piece.kind === 'rejectChute' || piece.kind === 'rejectTray');
+    expect(chutes.some((piece) => piece.points![0].x === piece.points![1].x &&
+      piece.points![0].z === piece.points![1].z)).toBe(true);
+    for (const piece of chutes) {
+      const curve = trackCurve(piece.points!);
+      const normal = sweepFrames(curve, 1)[0].up;
+      const marble = curve.getPointAt(0.5).add(new Vector3(0, MARBLE_LIFT, 0));
+      const [batch] = buildTrackBatches({ ...machine, pieces: [piece] });
+      const positions = batch.geometry.getAttribute('position');
+      let bedSurface = -Infinity;
+      for (let i = 0; i < positions.count / 3; i++) {
+        bedSurface = Math.max(bedSurface, new Vector3().fromBufferAttribute(positions, i).dot(normal));
+      }
+      expect(marble.dot(normal) - bedSurface).toBeCloseTo(MARBLE_LIFT, 5);
+      batch.geometry.dispose();
+    }
+  });
+
+  it('makes the rear channels narrower while keeping room for a letter marble', () => {
+    expect(REJECTION_CHANNEL.halfWidth - REJECTION_CHANNEL.lipWidth).toBeGreaterThan(0.18);
+    expect(REJECTION_CHANNEL.halfWidth).toBeLessThan(CHANNEL.halfWidth);
+    expect(REJECTION_CHANNEL.lipHeight).toBeLessThan(CHANNEL.lipHeight);
+    const machine = layout(parsePattern('ab', ''));
+    const spine = machine.pieces.find((piece) => piece.kind === 'rejectChute' &&
+      piece.points![0].x === piece.points![1].x && piece.points![0].z === piece.points![1].z)!;
+    const [batch] = buildTrackBatches({ ...machine, pieces: [spine] });
+    batch.geometry.computeBoundingBox();
+    const bounds = batch.geometry.boundingBox!;
+    expect(bounds.max.x - bounds.min.x).toBeCloseTo(REJECTION_CHANNEL.halfWidth * 2, 6);
+    batch.geometry.dispose();
+  });
+});
+
+describe('loop return routes', () => {
+  it('builds backtracking rails and lifts as open channels like the forward routes', () => {
+    const machine = layout(parsePattern('(a)+b', 'aab'));
+    const loops = machine.pieces.filter((piece) =>
+      ['returnRail', 'backLift', 'loopLift'].includes(piece.kind),
+    );
+    expect(loops.length).toBeGreaterThan(0);
+    const batches = buildTrackBatches({ ...machine, pieces: loops });
+    expect(batches.map((batch) => batch.finish).sort()).toEqual(['birch', 'vermilion']);
+    for (const batch of batches) {
+      expect(Array.from(batch.geometry.getAttribute('position').array).every(Number.isFinite)).toBe(true);
+      batch.geometry.dispose();
+    }
+  });
+
+  it('places a spring launcher at the foot of every lift, clear of the channel and the marble', () => {
+    const machine = layout(parsePattern('(a)+b', 'aab'));
+    const launchers = springLaunchers(machine);
+    expect(launchers.length).toBeGreaterThan(0);
+    for (const launcher of launchers) {
+      expect(['backLift', 'loopLift']).toContain(machine.pieces[launcher.piece].kind);
+      expect(machine.pieces[launcher.piece].points![0]).toEqual(launcher.base);
+      expect(launcher.length).toBeGreaterThan(0);
+      const geometry = springCoilGeometry(launcher.length);
+      geometry.computeBoundingBox();
+      const box = geometry.boundingBox!;
+      expect(box.min.y).toBeGreaterThanOrEqual(-SPRING_TUBE_RADIUS - 1e-6);
+      expect(box.max.y).toBeLessThanOrEqual(launcher.length + SPRING_TUBE_RADIUS + 1e-6);
+      expect(Math.hypot(box.max.x, box.max.z)).toBeLessThanOrEqual(SPRING_COIL_RADIUS + SPRING_TUBE_RADIUS + 1e-6);
+      expect(Array.from(geometry.getAttribute('position').array).every(Number.isFinite)).toBe(true);
+      geometry.dispose();
+    }
+    expect(SPRING_COIL_RADIUS - SPRING_TUBE_RADIUS).toBeGreaterThan(Math.hypot(CHANNEL.halfWidth, CHANNEL.lipHeight));
+  });
+});
 
 describe('static input rail', () => {
   it('retains UTF-16 indices with Unicode code points', () => {

@@ -72,15 +72,19 @@ export class Ride {
       const ib = piece?.points?.findIndex((p) => near(p, b.position)) ?? -1;
       if (curve && piece?.points && ia >= 0 && ib >= 0 && ia !== ib) {
         const n = piece.points.length - 1;
-        const chord = Math.hypot(
-          a.position.x - b.position.x,
-          a.position.y - b.position.y,
-          a.position.z - b.position.z,
-        );
+        const whole = Math.min(ia, ib) === 0 && Math.max(ia, ib) === n;
+        const chord = whole
+          ? curve.getLength()
+          : Math.hypot(
+              a.position.x - b.position.x,
+              a.position.y - b.position.y,
+              a.position.z - b.position.z,
+            );
         const samples = Math.max(SUBSAMPLES, Math.ceil(chord * 3));
         for (let s = 1; s < samples; s++) {
-          const u = (ia + ((ib - ia) * s) / samples) / n;
-          const p = curve.getPoint(u);
+          const p = whole
+            ? curve.getPointAt(ia < ib ? s / samples : 1 - s / samples)
+            : curve.getPoint((ia + ((ib - ia) * s) / samples) / n);
           out.push({ x: p.x, y: p.y, z: p.z });
         }
       }

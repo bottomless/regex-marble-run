@@ -12,6 +12,10 @@ const DROP = 2;
 const BRANCH_GAP = 3.0;
 /** Horizontal run between consecutive sequence items, so a sequence descends as a staircase. */
 export const STAIR_STEP = 3.0;
+/** How far a return feed descends from its exit to the foot of the spring shaft behind it. */
+export const LIFT_FEED_DROP = 0.5;
+const SHAFT_BEND = 0.3;
+const SHAFT_CREST = 0.25;
 type Bounds = MachineLayout['bounds'];
 type Ref = number | { child: number; port: 'entry' | 'exit' };
 interface Child {
@@ -93,7 +97,6 @@ export function layout(program: Program, options: { expandedModules?: number[] }
   const exit = builder.graph.points[root.exit].position;
   const hopper = addPoint(builder, add(entry, vec(0, 2, 0)), null);
   const cup = addPoint(builder, add(exit, vec(0, -1.8, 0)), null);
-  const reject = addPoint(builder, add(exit, vec(3.8, -1.8, 0)), null);
   connect(
     builder,
     'hopper',
@@ -116,17 +119,7 @@ export function layout(program: Program, options: { expandedModules?: number[] }
     vec(2.5, 1, 1.6),
     builder.graph.points[cup].position,
   );
-  connect(
-    builder,
-    'rejectTray',
-    null,
-    root.exit,
-    reject,
-    [add(exit, vec(2.8, -1.1, 0))],
-    'base',
-    vec(2.2, 1, 2),
-    builder.graph.points[reject].position,
-  );
+  buildRejectionNetwork(builder);
   return {
     bounds: boundsOf(
       builder.pieces,
@@ -136,6 +129,92 @@ export function layout(program: Program, options: { expandedModules?: number[] }
     graph: builder.graph,
     anchors: builder.anchors,
   };
+}
+
+function buildRejectionNetwork(builder: Builder): void {
+  const bounds = boundsOf(
+    builder.pieces,
+    builder.graph.points.map((point) => point.position),
+  );
+  const collectorX = bounds.max.x + 1.2;
+  const rear = bounds.min.z - 0.8;
+  const drains = new Map<string, number>();
+  for (const [node, anchor] of Object.entries(builder.anchors)) {
+    if (!anchor.gate) continue;
+    const key = `${anchor.entry}:${anchor.exit}`;
+    let port = drains.get(key);
+    if (port === undefined) {
+      port = addPoint(builder, add(anchor.gate, vec(0, -0.6)), Number(node));
+      drains.set(key, port);
+    }
+    anchor.rejectionPort = port;
+  }
+  const sources = [
+    ...new Set(
+      [
+        ...Object.values(builder.anchors).flatMap((anchor) =>
+          anchor.diverter ? [anchor.exit, anchor.entry] : [anchor.exit],
+        ),
+        ...drains.values(),
+        ...builder.pieces
+          .filter((piece) => piece.kind === 'module')
+          .map((piece) => builder.anchors[piece.node!].entry),
+      ],
+    ),
+  ].sort((a, b) => builder.graph.points[b].position.y - builder.graph.points[a].position.y);
+  let collector: number | undefined;
+  for (const source of sources) {
+    const start = builder.graph.points[source].position;
+    const height = start.y - 1;
+    if (collector === undefined || builder.graph.points[collector].position.y - height > 1e-8) {
+      const merge = addPoint(builder, vec(collectorX, height, rear), null);
+      if (collector !== undefined) connect(builder, 'rejectChute', null, collector, merge);
+      collector = merge;
+    }
+    const rearEntry = addPoint(builder, vec(start.x, start.y - 0.3, rear), null);
+    connect(builder, 'rejectChute', null, source, rearEntry);
+    connect(builder, 'rejectChute', null, rearEntry, collector);
+  }
+  const bottom = builder.graph.points[collector!].position;
+  const sink = addPoint(builder, add(bottom, vec(0, -1)), null);
+  connect(
+    builder,
+    'rejectTray',
+    null,
+    collector!,
+    sink,
+    [],
+    'base',
+    vec(2.2, 1, 2),
+    builder.graph.points[sink].position,
+  );
+}
+
+/**
+ * Controls for a lift: a straight vertical shaft rising from the spring at `foot`, then (when the
+ * port sits off to the side) a rounded crest that tips the marble over into the port.
+ */
+function springShaft(foot: Vec3, port: Vec3): Vec3[] {
+  const dx = port.x - foot.x;
+  const dz = port.z - foot.z;
+  const run = Math.hypot(dx, dz);
+  const base = vec(foot.x, foot.y + SHAFT_BEND, foot.z);
+  if (run < 0.6) {
+    const top = vec(foot.x, port.y - SHAFT_BEND, foot.z);
+    return top.y - base.y > 0.1 ? [base, top] : [];
+  }
+  const crest = Math.max(port.y + SHAFT_CREST, base.y + SHAFT_BEND + 0.2);
+  const ux = dx / run;
+  const uz = dz / run;
+  const controls = [base];
+  for (const angle of [0, 30, 60, 90]) {
+    const theta = (angle * Math.PI) / 180;
+    const out = SHAFT_BEND * (1 - Math.cos(theta));
+    controls.push(
+      vec(foot.x + ux * out, crest - SHAFT_BEND + SHAFT_BEND * Math.sin(theta), foot.z + uz * out),
+    );
+  }
+  return controls;
 }
 
 function childrenOf(node: IR): IR[] {
@@ -443,14 +522,24 @@ function measure(node: IR, collapsed: Set<number>, depth: number, ghost: boolean
       ghost ? 'look' : node.kind === 'alt' ? 'alternation' : node.greedy ? 'repeat' : 'lazyRepeat',
     );
     if (node.kind === 'repeat') {
+      const loopRole = ghost ? 'look' : node.greedy ? 'repeat' : 'lazyRepeat';
       const end = position(plan, childRef(0, 'exit'));
+      const foot = localPoint(plan, vec(end.x, end.y - LIFT_FEED_DROP, rear));
+      curve(
+        plan,
+        'returnRail',
+        childRef(0, 'exit'),
+        foot,
+        [vec(end.x, end.y - LIFT_FEED_DROP / 2, (end.z + rear) / 2)],
+        loopRole,
+      );
       curve(
         plan,
         'loopLift',
-        childRef(0, 'exit'),
+        foot,
         plan.returnPort,
-        [vec(end.x, end.y + 0.3, rear), vec(0, 0.3, rear)],
-        ghost ? 'look' : node.greedy ? 'repeat' : 'lazyRepeat',
+        springShaft(plan.points[foot], plan.points[plan.returnPort]),
+        loopRole,
       );
     }
   }
@@ -546,7 +635,7 @@ function place(plan: Measured, builder: Builder, offset: Vec3, parents: Choice[]
       const from = ownChoice?.port ?? anchor.exit;
       const start = builder.graph.points[from].position;
       const port = builder.graph.points[parent.port].position;
-      const rear = vec(start.x, start.y - 0.5, Math.min(start.z, port.z));
+      const rear = vec(start.x, start.y - LIFT_FEED_DROP, Math.min(start.z, port.z));
       const railEnd = addPoint(builder, rear, plan.node.id);
       const role = plan.curves[0]?.piece.role === 'look' ? 'look' : parent.role;
       connect(
@@ -555,21 +644,10 @@ function place(plan: Measured, builder: Builder, offset: Vec3, parents: Choice[]
         plan.node.id,
         from,
         railEnd,
-        [vec(start.x, start.y - 0.25, (start.z + rear.z) / 2)],
+        [vec(start.x, start.y - LIFT_FEED_DROP / 2, (start.z + rear.z) / 2)],
         role,
       );
-      connect(
-        builder,
-        'backLift',
-        parent.node,
-        railEnd,
-        parent.port,
-        [
-          vec(start.x, rear.y + (port.y - rear.y) * 0.25, rear.z),
-          vec(port.x, rear.y + (port.y - rear.y) * 0.75, rear.z),
-        ],
-        role,
-      );
+      connect(builder, 'backLift', parent.node, railEnd, parent.port, springShaft(rear, port), role);
     }
   }
   return { anchor, choices };

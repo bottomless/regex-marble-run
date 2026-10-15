@@ -72,6 +72,118 @@ function returnGraph(ml: MachineLayout): MachineLayout['graph'] {
   };
 }
 
+function checkRejectionNetwork(ml: MachineLayout, rootExit: number): void {
+  const rejects = (kind: PieceKind) => kind === 'rejectChute' || kind === 'rejectTray';
+  const rejection = {
+    ...ml.graph,
+    edges: ml.graph.edges.filter((edge) => rejects(ml.pieces[edge.piece].kind)),
+  };
+  const normal = {
+    ...ml.graph,
+    edges: ml.graph.edges.filter((edge) => !rejects(ml.pieces[edge.piece].kind)),
+  };
+  const normalSources = new Set([
+    ...Object.values(ml.anchors).flatMap((anchor) =>
+      anchor.diverter ? [anchor.exit, anchor.entry] : [anchor.exit],
+    ),
+    ...ml.pieces.filter((piece) => piece.kind === 'module').map((piece) => ml.anchors[piece.node!].entry),
+  ]);
+  const drains = new Set(
+    Object.values(ml.anchors).flatMap((anchor) =>
+      anchor.rejectionPort === undefined ? [] : [anchor.rejectionPort],
+    ),
+  );
+  const sources = new Set([...normalSources, ...drains]);
+  const trays = rejection.edges.filter((edge) => ml.pieces[edge.piece].kind === 'rejectTray');
+  expect(trays).toHaveLength(1);
+  const tray = trays[0];
+  const sink = ml.graph.points[tray.to].position;
+  const cup = normal.edges.find((edge) => ml.pieces[edge.piece].kind === 'cup')!;
+  const cupPosition = ml.graph.points[cup.to].position;
+  expect(
+    Math.hypot(sink.x - cupPosition.x, sink.y - cupPosition.y, sink.z - cupPosition.z),
+  ).toBeGreaterThanOrEqual(2.8);
+  expect(sources.has(tray.from)).toBe(false);
+  expect(ml.graph.edges.filter((edge) => edge.from === tray.to)).toHaveLength(0);
+  const privatePoints = new Set(rejection.edges.map((edge) => edge.to));
+  const normalPoints = new Set(normal.edges.flatMap((edge) => [edge.from, edge.to]));
+  const normalLengths = new Map(normal.edges.map((edge) => [`${edge.from}:${edge.to}`, edge.length!]));
+  const pathLength = (path: number[]) =>
+    path.slice(1).reduce((sum, to, i) => sum + normalLengths.get(`${path[i]}:${to}`)!, 0);
+  expect([...privatePoints].every((point) => !normalPoints.has(point))).toBe(true);
+  expect(
+    ml.graph.edges
+      .filter((edge) => privatePoints.has(edge.from))
+      .every((edge) => rejects(ml.pieces[edge.piece].kind)),
+  ).toBe(true);
+  const edgeKinds = new Map(
+    rejection.edges.map((edge) => [`${edge.from}:${edge.to}`, ml.pieces[edge.piece].kind]),
+  );
+  expect(edgeKinds.size).toBe(rejection.edges.length);
+  for (const edge of rejection.edges) {
+    const piece = ml.pieces[edge.piece];
+    expect(piece.points).toHaveLength(2);
+    expect(edge.length).toBeGreaterThan(1e-8);
+    expect(ml.graph.points[edge.to].position.y).toBeLessThan(ml.graph.points[edge.from].position.y);
+  }
+  const outgoing = new Map<number, MachineLayout['graph']['edges']>();
+  for (const edge of rejection.edges) {
+    const edges = outgoing.get(edge.from) ?? [];
+    edges.push(edge);
+    outgoing.set(edge.from, edges);
+  }
+  const merges = new Set<number>();
+  for (const source of sources) {
+    const start = ml.graph.points[source].position;
+    const feeders = outgoing.get(source)!;
+    expect(feeders).toHaveLength(1);
+    const rearEntry = feeders[0].to;
+    expect(ml.graph.points[rearEntry].position).toEqual({ x: start.x, y: start.y - 0.3, z: sink.z });
+    expect(ml.graph.points[rearEntry].position.z).toBeLessThan(start.z);
+    const joining = outgoing.get(rearEntry)!;
+    expect(joining).toHaveLength(1);
+    const merge = joining[0].to;
+    merges.add(merge);
+    expect(ml.graph.points[merge].position.x).toBe(sink.x);
+    expect(ml.graph.points[merge].position.y).toBeCloseTo(start.y - 1, 8);
+    expect(ml.graph.points[merge].position.z).toBe(sink.z);
+    const tail = routePath(ml.graph, rearEntry, tray.to);
+    expect(tail).not.toBeNull();
+    expect(tail![0]).toBe(rearEntry);
+    const path = [source, ...tail!];
+    expect(path.at(-1)).toBe(tray.to);
+    expect(path.slice(1).every((to, i) => rejects(edgeKinds.get(`${path[i]}:${to}`)!))).toBe(true);
+    for (const target of [rootExit, cup.to]) {
+      const pass = routePath(ml.graph, source, target);
+      if (drains.has(source)) {
+        expect(pass).toBeNull();
+        expect(normalPoints.has(source)).toBe(false);
+        expect(ml.graph.edges.some((edge) => edge.to === source)).toBe(false);
+      } else {
+        expect(pass).not.toBeNull();
+        expect(pass!.every((point) => !privatePoints.has(point))).toBe(true);
+        expect(pathLength(pass!)).toBeCloseTo(pathLength(routePath(normal, source, target)!), 8);
+      }
+    }
+  }
+  const heights = [...merges].map((point) => ml.graph.points[point].position.y).sort((a, b) => b - a);
+  for (let i = 1; i < heights.length; i++) expect(heights[i - 1] - heights[i]).toBeGreaterThan(1e-8);
+  expect(rejection.edges).toHaveLength(sources.size * 2 + merges.size);
+  expect(merges.has(tray.from)).toBe(true);
+  expect(ml.graph.points[tray.from].position.y).toBe(heights.at(-1));
+  expect(sink.y).toBeLessThan(heights.at(-1)!);
+  const normalPieces = ml.pieces.filter((piece) => !rejects(piece.kind));
+  expect(sink.x).toBeGreaterThanOrEqual(
+    Math.max(...normalPieces.map((piece) => piece.position.x + piece.size.x / 2)) + 1.2 - 1e-8,
+  );
+  expect(sink.z).toBeLessThanOrEqual(
+    Math.min(...normalPieces.map((piece) => piece.position.z - piece.size.z / 2)) - 0.8 + 1e-8,
+  );
+  expect([...privatePoints].every((point) => ml.graph.points[point].position.z === sink.z)).toBe(true);
+  expect(routePath(ml.graph, tray.to, rootExit)).toBeNull();
+  expect(routePath(ml.graph, tray.to, cup.to)).toBeNull();
+}
+
 function moduleFor(ml: MachineLayout, node: IR): Piece | undefined {
   return ml.pieces.find((piece) => piece.kind === 'module' && piece.containedNodes?.includes(node.id));
 }
@@ -226,10 +338,12 @@ function checkInvariants(program: Program, options?: { expandedModules?: number[
       expect(edge.to).toBe(root.entry);
       validPath(ml, endpoint, root.exit);
     } else {
-      expect(edge.from).toBe(root.exit);
+      if (kind === 'cup') expect(edge.from).toBe(root.exit);
+      else expect(pieces[graph.edges.find((item) => item.to === edge.from)!.piece].kind).toBe('rejectChute');
       validPath(ml, root.entry, endpoint);
     }
   }
+  checkRejectionNetwork(ml, root.exit);
   const solid = pieces.filter((piece) => SOLID_KINDS.has(piece.kind));
   for (let i = 0; i < solid.length; i++) {
     for (let j = i + 1; j < solid.length; j++) {
@@ -333,11 +447,20 @@ describe('layout: geometry and structure', () => {
       const bypass = ml.pieces.find((piece) => piece.node === repeat.id && piece.kind === 'bypassChute')!;
       expect(bypass.role).toBe(repeat.greedy ? 'repeat' : 'lazyRepeat');
       expect(bypass.points!.slice(1, -1).every((point) => point.x > 1.4)).toBe(true);
+      const feeds = ml.graph.edges.filter(
+        (edge) => edge.from === body.exit && ml.pieces[edge.piece].kind === 'returnRail',
+      );
       const loopEdge = ml.graph.edges.find(
-        (edge) => edge.from === body.exit && ml.pieces[edge.piece].kind === 'loopLift',
+        (edge) => feeds.some((feed) => feed.to === edge.from) && ml.pieces[edge.piece].kind === 'loopLift',
       )!;
+      const feed = feeds.find((item) => item.to === loopEdge.from)!;
       expect(loopEdge.to).toBe(anchor.returnPort);
-      expect(ml.pieces[loopEdge.piece].points!.slice(1).every((point) => point.z < 0)).toBe(true);
+      expect(ml.pieces[feed.piece].points!.slice(1).every((point) => point.z < 0)).toBe(true);
+      const shaft = ml.pieces[loopEdge.piece].points!;
+      expect(shaft.every((point) => point.z < 0)).toBe(true);
+      expect(shaft[1].x).toBeCloseTo(shaft[0].x, 8);
+      expect(shaft[1].z).toBeCloseTo(shaft[0].z, 8);
+      expect(shaft[1].y).toBeGreaterThan(shaft[0].y);
       validPath(ml, body.exit, anchor.entry);
     },
   );
@@ -395,6 +518,70 @@ describe('layout: geometry and structure', () => {
     expect(Math.max(...entries.map((point) => Math.abs(point.x)))).toBeLessThanOrEqual(
       STAIR_STEP * Math.ceil(Math.sqrt(7)) + 1e-8,
     );
+  });
+});
+
+describe('layout: physical rejection network', () => {
+  it.each([
+    String.raw`^\b(a|b)+\1\B$`,
+    String.raw`(?<letter>\w)\k<letter>`,
+    '(?=a|b)(?!c)d',
+    '(?<=a|bc)d(?<!e)',
+    '(a|b)+?',
+    '((a|b)c|(d|e)f)g',
+  ])('gives gates, sensors, mirrors, scouts, and choices terminal rejection routes in %s', (source) => {
+    checkInvariants(parsePattern(source, ''));
+  });
+
+  it.each(['abcdefgh', 'abcdefghijklm', '^a+b$', '(a|b)+c', '(\\w)\\1'])(
+    'gives holding racks dedicated downhill drains in %s',
+    (source) => {
+      const ml = checkInvariants(parsePattern(source, ''));
+      for (const anchor of Object.values(ml.anchors)) {
+        if (!anchor.gate) continue;
+        expect(anchor.rejectionPort).toBeDefined();
+        const port = ml.graph.points[anchor.rejectionPort!];
+        expect(port.position).toEqual({ ...anchor.gate, y: anchor.gate.y - 0.6 });
+        expect(port.id).not.toBe(anchor.entry);
+        expect(port.id).not.toBe(anchor.exit);
+        expect(ml.graph.edges.filter((edge) => edge.from === port.id)).toHaveLength(1);
+      }
+    },
+  );
+
+  it('deduplicates shared exits and collapsed descendant anchors before attaching feeders', () => {
+    const program = parsePattern(`((?:${'a'.repeat(30)})${'b'.repeat(30)})${'c'.repeat(30)}`, '');
+    const ml = checkInvariants(program);
+    const module = ml.pieces.find((piece) => piece.kind === 'module')!;
+    const exit = ml.anchors[module.node!].exit;
+    expect(module.containedNodes!.every((node) => ml.anchors[node].exit === exit)).toBe(true);
+    const drain = ml.anchors[module.node!].rejectionPort!;
+    expect(drain).toBeDefined();
+    expect(module.containedNodes!.every((node) => ml.anchors[node].rejectionPort === drain)).toBe(true);
+    expect(
+      ml.graph.edges.filter((edge) => edge.from === drain && ml.pieces[edge.piece].kind === 'rejectChute'),
+    ).toHaveLength(1);
+    expect(
+      ml.graph.edges.filter((edge) => edge.from === exit && ml.pieces[edge.piece].kind === 'rejectChute'),
+    ).toHaveLength(1);
+    const expanded = checkInvariants(program, { expandedModules: [module.node!] });
+    expect(expanded.pieces.filter((piece) => piece.kind === 'rejectChute').length).toBeGreaterThan(
+      ml.pieces.filter((piece) => piece.kind === 'rejectChute').length,
+    );
+  });
+
+  it('shares equal-height merges and keeps the spine strictly descending', () => {
+    const program = parsePattern('a|b|c', '');
+    const ml = checkInvariants(program);
+    const branches = nodeOf(program, 'alt').branches;
+    const merges = branches.map((branch) => {
+      const source = ml.anchors[branch.id].exit;
+      const forward = ml.graph.edges.find(
+        (edge) => edge.from === source && ml.pieces[edge.piece].kind === 'rejectChute',
+      )!.to;
+      return ml.graph.edges.find((edge) => edge.from === forward)!.to;
+    });
+    expect(new Set(merges).size).toBe(1);
   });
 });
 

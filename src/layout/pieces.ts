@@ -16,6 +16,7 @@ export type PieceKind =
   | 'funnel'
   | 'loopLift'
   | 'bypassChute'
+  | 'rejectChute'
   | 'returnRail'
   | 'backLift'
   | 'groupFrame'
@@ -62,6 +63,7 @@ export interface NodeAnchor {
   diverter?: Vec3;
   flagSlot?: Vec3;
   returnPort?: number;
+  rejectionPort?: number;
 }
 
 export interface MachineLayout {

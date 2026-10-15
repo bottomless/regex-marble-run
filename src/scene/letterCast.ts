@@ -1,17 +1,17 @@
 import { T, type Trace } from '../engine/trace.ts';
 import type { MachineLayout, PieceKind, Vec3 } from '../layout/pieces.ts';
-import { routePath } from '../layout/route.ts';
+import { rejectionPath, routePath } from '../layout/route.ts';
 import { pointAlongPolyline, polylineLength, poseForSegment } from '../playback/motion.ts';
 import { ROLL_PER_UNIT_MS, type Segment, type Timeline } from '../playback/timeline.ts';
-import { trackCurve, visibleTiles } from './geometry.ts';
+import { MARBLE_LIFT, trackCurve, visibleTiles } from './geometry.ts';
 import { gateOffset, holdOffset, restOffset } from './letterTrip.ts';
 import { Ride } from './ride.ts';
 
-const LIFT = 0.16;
+const LIFT = MARBLE_LIFT;
 const TILES = 36;
 const LOOP: ReadonlySet<PieceKind> = new Set(['bypassChute', 'returnRail', 'loopLift', 'backLift']);
 
-export type CastKind = 'hold' | 'follow' | 'approach' | 'park' | 'fall' | 'reject' | 'cup';
+export type CastKind = 'hold' | 'follow' | 'approach' | 'park' | 'discard' | 'reject' | 'cup';
 
 export interface CastSpan {
   t0: number;
@@ -22,6 +22,7 @@ export interface CastSpan {
   via?: Vec3;
   at?: Vec3;
   points?: Vec3[];
+  route?: number[];
   delay?: number;
 }
 
@@ -112,27 +113,6 @@ function unitInterval(span: CastSpan, time: number): number {
   return Math.min(1, Math.max(0, (time - span.t0) / spanTime));
 }
 
-function beside(gate: Vec3, reject: Vec3): Vec3 {
-  const sign = Math.sign(reject.x - gate.x) || 1;
-  return { x: gate.x + sign * 1.15, y: gate.y + LIFT + 0.18, z: gate.z + 0.55 };
-}
-
-function fallAt(from: Vec3, via: Vec3, to: Vec3, u: number): Vec3 {
-  if (u < 0.38) return lerp(from, via, u / 0.38);
-  const v = (u - 0.38) / 0.62;
-  const drop = lerp(via, to, v);
-  return { x: drop.x, y: drop.y + Math.sin(v * Math.PI) * 0.22 * (1 - v), z: drop.z };
-}
-
-function fallPolyline(from: Vec3, via: Vec3, to: Vec3): Vec3[] {
-  const steps = 16;
-  const pts: Vec3[] = [];
-  for (let i = 0; i <= steps; i++) {
-    pts.push(fallAt(from, via, to, i / steps));
-  }
-  return dedupPoints(pts);
-}
-
 function returnToHopperPolyline(layout: MachineLayout, from: Vec3, to: Vec3): Vec3[] {
   const total = Math.hypot(from.x - to.x, from.y - to.y, from.z - to.z);
   if (total < 1e-3) return [from, to];
@@ -168,7 +148,7 @@ export function castAt(cast: LetterCast, time: number, _pose: Vec3 | null): Plac
   let holds = 0;
   return cast.spans.map((spans) => {
     const span = activeSpan(spans, time);
-    const riding = span.kind === 'follow' || span.kind === 'approach';
+    const riding = span.kind === 'follow' || span.kind === 'approach' || span.kind === 'discard';
     const visible = span.kind !== 'hold' || holds++ < 8;
     let position = span.at ?? span.from ?? { x: 0, y: 0, z: 0 };
     if (span.points && span.points.length > 1) {
@@ -221,6 +201,35 @@ function continues(trace: Trace, event: number, pos: number): boolean {
     return false;
   }
   return false;
+}
+
+interface CachedCast {
+  trace: Trace;
+  layout: MachineLayout;
+  input: string;
+  unicode: boolean;
+  cast: LetterCast;
+}
+
+const castCache = new WeakMap<Timeline, CachedCast[]>();
+
+/** `compileCast`, shared between the marbles and the pieces that react to them. */
+export function sharedCast(
+  trace: Trace,
+  timeline: Timeline,
+  layout: MachineLayout,
+  input: string,
+  unicode: boolean,
+): LetterCast {
+  const entries = castCache.get(timeline) ?? [];
+  const hit = entries.find(
+    (entry) => entry.trace === trace && entry.layout === layout && entry.input === input && entry.unicode === unicode,
+  );
+  if (hit) return hit.cast;
+  const cast = compileCast(trace, timeline, layout, input, unicode);
+  entries.push({ trace, layout, input, unicode, cast });
+  castCache.set(timeline, entries.slice(-4));
+  return cast;
 }
 
 export function compileCast(
@@ -318,6 +327,7 @@ export function compileCast(
     moveKind: CastKind,
     rawPoints: Vec3[],
     afterKind: CastKind,
+    route?: number[],
   ): number => {
     const from = lastAt[tile];
     const points = dedupPoints([from, ...rawPoints]);
@@ -340,12 +350,24 @@ export function compileCast(
       if (prev.t1 <= prev.t0) list.pop();
     }
     if (duration > 0) {
-      list.push({ t0, t1, kind: moveKind, from, to: target, points });
+      list.push({ t0, t1, kind: moveKind, from, to: target, points, route });
     }
     list.push({ t0: t1, t1: Infinity, kind: afterKind, at: target });
     lastAt[tile] = target;
     lastTime[tile] = t1;
     return t1;
+  };
+
+  const rejectTile = (tile: number, startTime: number, fromPoint = tilePoint[tile]): void => {
+    const node = mode[tile] === 'park' ? tileGateNode[tile] : null;
+    const outlet = (node !== null ? layout.anchors[node]?.rejectionPort : undefined) ?? fromPoint;
+    const route = outlet === null ? null : rejectionPath(layout, outlet);
+    if (!route) throw new Error('Missing rejection track for marble');
+    releaseGateSlot(tile);
+    const to = rejectAt();
+    moveTile(tile, startTime, null, 'discard', [...rideSpline.points(route).map(lifted), to], 'reject', route);
+    mode[tile] = 'reject';
+    tilePoint[tile] = null;
   };
 
   const attemptChain: number[] = hopperStart !== null ? [hopperStart] : [];
@@ -423,9 +445,9 @@ export function compileCast(
       let releaseIndex = 0;
       for (let tile = 0; tile < tiles.length; tile++) {
         if (mode[tile] === 'hold' || mode[tile] === 'reject') continue;
-        releaseGateSlot(tile);
         const startT = win.t0 + releaseIndex++ * releaseStaggerMs;
         if (retestedAfter(tile, event)) {
+          releaseGateSlot(tile);
           const back = holdAt(tile);
           moveTile(
             tile,
@@ -440,17 +462,7 @@ export function compileCast(
           continue;
         }
         if (inMatch(tile) && mode[tile] === 'park') continue;
-        const to = rejectAt();
-        moveTile(
-          tile,
-          startT,
-          null,
-          'fall',
-          fallPolyline(lastAt[tile], beside(lastAt[tile], reject), to),
-          'reject',
-        );
-        mode[tile] = 'reject';
-        tilePoint[tile] = null;
+        rejectTile(tile, startT);
       }
     } else if (kind === T.choose) {
       for (const seg of segs) {
@@ -514,17 +526,7 @@ export function compileCast(
           tilePoint[tile] = hopperStart;
           continue;
         }
-        const to = rejectAt();
-        moveTile(
-          tile,
-          arrivedT,
-          null,
-          'fall',
-          fallPolyline(lastAt[tile], beside(gate, reject), to),
-          'reject',
-        );
-        mode[tile] = 'reject';
-        tilePoint[tile] = null;
+        rejectTile(tile, arrivedT, anchor.exit);
       }
       extendChain(anchor.exit);
     } else if (kind === T.backtrack) {
@@ -560,19 +562,8 @@ export function compileCast(
           mode[other] = 'hold';
           tilePoint[other] = hopperStart;
         } else {
-          releaseGateSlot(other);
           const startT = win.t0 + releaseIndex++ * releaseStaggerMs;
-          const to = rejectAt();
-          moveTile(
-            other,
-            startT,
-            null,
-            'fall',
-            fallPolyline(lastAt[other], beside(lastAt[other], reject), to),
-            'reject',
-          );
-          mode[other] = 'reject';
-          tilePoint[other] = null;
+          rejectTile(other, startT);
         }
       }
       if (tile !== null && mode[tile] !== 'reject' && mode[tile] !== 'hold') {
@@ -625,38 +616,16 @@ export function compileCast(
           mode[tile] = 'park';
           tilePoint[tile] = cupEnd;
         } else if (mode[tile] === 'park' || mode[tile] === 'follow') {
-          releaseGateSlot(tile);
-          const to = rejectAt();
           const startT = win.t0 + rejectReleaseIndex++ * releaseStaggerMs;
-          moveTile(
-            tile,
-            startT,
-            null,
-            'fall',
-            fallPolyline(lastAt[tile], beside(lastAt[tile], reject), to),
-            'reject',
-          );
-          mode[tile] = 'reject';
-          tilePoint[tile] = null;
+          rejectTile(tile, startT);
         }
       }
     } else if (kind === T.nomatch) {
       let releaseIndex = 0;
       for (let tile = 0; tile < tiles.length; tile++) {
         if (mode[tile] === 'hold' || mode[tile] === 'reject') continue;
-        releaseGateSlot(tile);
-        const to = rejectAt();
         const startT = win.t0 + releaseIndex++ * releaseStaggerMs;
-        moveTile(
-          tile,
-          startT,
-          null,
-          'fall',
-          fallPolyline(lastAt[tile], beside(lastAt[tile], reject), to),
-          'reject',
-        );
-        mode[tile] = 'reject';
-        tilePoint[tile] = null;
+        rejectTile(tile, startT);
       }
     }
   }

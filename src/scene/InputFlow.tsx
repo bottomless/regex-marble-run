@@ -4,13 +4,12 @@ import { useStore } from 'zustand';
 import { Vector3 } from 'three';
 import type { Group, Mesh, PointLight } from 'three';
 import type { MachineLayout } from '../layout/pieces.ts';
-import { carriageAtIndex } from '../playback/carriage.ts';
 import { poseAtIndex } from '../playback/motion.ts';
 import type { PlaybackStore } from '../playback/store.ts';
 import { letterGlyph } from './geometry.ts';
 import type { Materials } from './materials.ts';
 import Glyph from './Glyph.tsx';
-import { castAt, compileCast, type LetterCast } from './letterCast.ts';
+import { castAt, sharedCast, type LetterCast } from './letterCast.ts';
 import { Ride } from './ride.ts';
 
 const RADIUS = 0.18;
@@ -23,8 +22,6 @@ function bedAt(
 ): { x: number; y: number; z: number } | null {
   const snapshot = store.getState();
   if (!snapshot.timeline) return null;
-  const carriage = carriageAtIndex(machine, snapshot.timeline, snapshot.segmentIndex, snapshot.fraction);
-  if (carriage) return carriage.rail;
   return (
     ride.along(snapshot.timeline, snapshot.segmentIndex, snapshot.fraction) ??
     poseAtIndex(machine, snapshot.timeline, snapshot.segmentIndex, snapshot.fraction)?.position ??
@@ -62,7 +59,7 @@ function CastMarbles({
       if (place.riding) rider = i;
       const sphere = balls.current[i];
       const previous = lasts.current[i];
-      if (sphere && previous && (place.riding || place.kind === 'fall' || place.kind === 'cup')) {
+      if (sphere && previous && (place.riding || place.kind === 'cup')) {
         const step = new Vector3(at.x, at.y, at.z).sub(previous);
         const distance = step.length();
         if (distance > 1e-5 && distance < 2) {
@@ -133,7 +130,7 @@ export default function InputFlow({
   const timeline = useStore(store, (s) => s.timeline);
   const cast = useMemo(() => {
     if (!trace || !timeline || input.length === 0) return null;
-    return compileCast(trace, timeline, machine, input, unicode);
+    return sharedCast(trace, timeline, machine, input, unicode);
   }, [trace, timeline, machine, input, unicode]);
   if (!cast || cast.glyphs.length === 0) return null;
   return <CastMarbles cast={cast} store={store} machine={machine} materials={materials} />;
